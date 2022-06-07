@@ -36,14 +36,14 @@ module Invidious::Database::Playlists
   #  Update
   # -------------------
 
-  def update(id : String, title : String, privacy, description, updated)
+  def update(id : String, title : String, privacy, description, index, updated)
     request = <<-SQL
       UPDATE playlists
-      SET title = $1, privacy = $2, description = $3, updated = $4
-      WHERE id = $5
+      SET title = $1, privacy = $2, description = $3, index = $4, updated = $5, video_count = cardinality(index) + 1
+      WHERE id = $6
     SQL
 
-    PG_DB.exec(request, title, privacy, description, updated, id)
+    PG_DB.exec(request, title, privacy, description, index, updated, id)
   end
 
   def update_description(id : String, description)

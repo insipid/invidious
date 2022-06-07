@@ -2,9 +2,9 @@
 <meta name="description" content="<%= translate(locale, "An alternative front-end to YouTube") %>">
 <title>
     <% if env.get("preferences").as(Preferences).default_home != "Popular" %>
-        <%= translate(locale, "Popular") %> - Invidious
+        <%= translate(locale, "Popular") %> - Myvidious
     <% else %>
-        Invidious
+        Myvidious
     <% end %>
 </title>
 <% end %>
@@ -12,7 +12,7 @@
 <%= rendered "components/feed_menu" %>
 
 <div class="pure-g">
-<% popular_videos.each do |item| %>
+<% popular_videos.each_with_index do |item, item_index| %>
     <%= rendered "components/item" %>
 <% end %>
 </div>

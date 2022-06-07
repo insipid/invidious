@@ -41,7 +41,7 @@
 </div>
 
 <div class="pure-g">
-<% trending.each do |item| %>
+<% trending.each_with_index do |item, item_index| %>
     <%= rendered "components/item" %>
 <% end %>
 </div>

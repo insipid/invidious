@@ -1,7 +1,7 @@
 <% title = HTML.escape(playlist.title) %>
 
 <% content_for "header" do %>
-<title><%= title %> - Invidious</title>
+<title><%= title %> - Whargarrble - Invidious</title>
 <link rel="alternate" type="application/rss+xml" title="RSS" href="/feed/playlist/<%= plid %>" />
 <% end %>
 
@@ -42,7 +42,6 @@
         <textarea maxlength="5000" name="description" style="margin-top:10px;max-width:100%;height:20vh" class="pure-input-1"><%= playlist.description %></textarea>
     </div>
     <input type="hidden" name="csrf_token" value="<%= HTML.escape(csrf_token) %>">
-</form>
 
 <% if playlist.is_a?(InvidiousPlaylist) && playlist.author == user.try &.email %>
 <div class="h-box" style="text-align:right">
@@ -53,14 +52,16 @@
 <% end %>
 
 <div class="h-box">
-    <hr>
+  <hr>
 </div>
 
 <div class="pure-g">
-<% videos.each do |item| %>
-    <%= rendered "components/item" %>
-<% end %>
+  <% videos.each_with_index do |item, item_index| %>
+  <%= rendered "components/item" %>
+  <% end %>
 </div>
+
+</form>
 
 <div class="pure-g h-box">
     <div class="pure-u-1 pure-u-lg-1-5">

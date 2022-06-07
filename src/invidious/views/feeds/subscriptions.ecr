@@ -34,7 +34,7 @@
 <% end %>
 
 <div class="pure-g">
-<% notifications.each do |item| %>
+<% notifications.each_with_index do |item, item_index| %>
     <%= rendered "components/item" %>
 <% end %>
 </div>
@@ -53,7 +53,7 @@
 <script src="/js/watched_widget.js"></script>
 
 <div class="pure-g">
-<% videos.each do |item| %>
+<% videos.each_with_index do |item, item_index| %>
     <%= rendered "components/item" %>
 <% end %>
 </div>

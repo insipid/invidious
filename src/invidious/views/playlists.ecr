@@ -91,7 +91,7 @@
 </div>
 
 <div class="pure-g">
-<% items.each do |item| %>
+<% items.each_with_index do |item, item_index| %>
     <%= rendered "components/item" %>
 <% end %>
 </div>
