@@ -27,8 +27,6 @@
                         <p class="length"><%= translate_count(locale, "generic_videos_count", item.video_count, NumberFormatting::Separator) %></p>
                     </div>
                 <% end %>
-                                <p dir="auto">a: <% if item.responds_to?(:index) %><%= item.index %><% end %></p>
-                <p dir="auto">a: <%= HTML.escape(item.title) %></p>
             </a>
             <a href="/channel/<%= item.ucid %>">
                 <p dir="auto"><b><%= HTML.escape(item.author) %><% if !item.is_a?(InvidiousPlaylist) && !item.author_verified.nil? && item.author_verified %>&nbsp;<i class="icon ion ion-md-checkmark-circle"></i><% end %></b></p>
@@ -43,8 +41,6 @@
                         <% end %>
                     </div>
                 <% end %>
-               <p dir="auto">b: <% if item.responds_to?(:index) %><%= item.index %><% end %></p>
-                <p dir="auto">b: <%= HTML.escape(item.title) %></p>
             </a>
             <a href="/channel/<%= item.ucid %>">
                 <p dir="auto"><b><%= HTML.escape(item.author) %></b></p>
