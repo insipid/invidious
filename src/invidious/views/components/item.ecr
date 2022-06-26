@@ -138,8 +138,7 @@
                         <% end %>
                     </div>
                 <% end %>
-                <p dir="auto">d: <% if item.responds_to?(:index) %><%= item.index %><% end %></p>
-                <p dir="auto">d: <%= HTML.escape(item.title) %></p>
+                <p dir="auto"><%= HTML.escape(item.title) %></p>
             </a>
 
             <div class="video-card-row flexible">
