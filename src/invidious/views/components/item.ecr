@@ -27,6 +27,7 @@
                         <p class="length"><%= translate_count(locale, "generic_videos_count", item.video_count, NumberFormatting::Separator) %></p>
                     </div>
                 <% end %>
+                <p dir="auto"><%= HTML.escape(item.title) %></p>
             </a>
             <a href="/channel/<%= item.ucid %>">
                 <p dir="auto"><b><%= HTML.escape(item.author) %><% if !item.is_a?(InvidiousPlaylist) && !item.author_verified.nil? && item.author_verified %>&nbsp;<i class="icon ion ion-md-checkmark-circle"></i><% end %></b></p>
@@ -40,6 +41,7 @@
                             <p class="length"><%= recode_length_seconds(item.length_seconds) %></p>
                         <% end %>
                     </div>
+                    <p dir="auto"><%= HTML.escape(item.title) %></p>
                 <% end %>
             </a>
             <a href="/channel/<%= item.ucid %>">
@@ -70,7 +72,7 @@
                         <% end %>
                     </div>
                 <% end %>
-                    <p dir="auto"><%= HTML.escape(item.title) %></p>
+                <p dir="auto"><%= HTML.escape(item.title) %></p>
             </a>
             <% if env.request.path == "/edit_playlist" %>
               <input class="pure-input-1" maxlength="3" name="order" type="text" value="<%= item_index %>">
