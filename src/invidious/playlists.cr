@@ -85,17 +85,18 @@ struct Playlist
   property ucid : String
   property description : String
   property description_html : String
+  property thumbnail_url : String?
   property video_count : Int32
   property views : Int64
   property updated : Time
-  property thumbnail : String?
 
   def to_json(offset, json : JSON::Builder, video_id : String? = nil)
     json.object do
       json.field "type", "playlist"
       json.field "title", self.title
       json.field "playlistId", self.id
-      json.field "playlistThumbnail", self.thumbnail
+      # NOTE: I have no idea where this came from
+      # json.field "playlistThumbnail", self.thumbnail
 
       json.field "author", self.author
       json.field "authorId", self.ucid
@@ -158,6 +159,7 @@ struct InvidiousPlaylist
   property id : String
   property author : String
   property description : String = ""
+  property thumbnail_url : String?
   property video_count : Int32
   property created : Time
   property updated : Time
@@ -219,7 +221,12 @@ struct InvidiousPlaylist
   def thumbnail
     # TODO: Get playlist thumbnail from playlist data rather than first video
     @thumbnail_id ||= Invidious::Database::PlaylistVideos.select_one_id(self.id, self.index) || "-----------"
-    "/vi/#{@thumbnail_id}/mqdefault.jpg"
+
+    if (self.responds_to? :thumbnail_url && !self.thumbnail_url.try &.empty?)
+      self.thumbnail_url
+    else
+      "/vi/#{@thumbnail_id}/mqdefault.jpg"
+    end
   end
 
   def author_thumbnail
@@ -243,15 +250,16 @@ def create_playlist(title, privacy, user)
   plid = "IVPL#{Random::Secure.urlsafe_base64(24)[0, 31]}"
 
   playlist = InvidiousPlaylist.new({
-    title:       title.byte_slice(0, 150),
-    id:          plid,
-    author:      user.email,
-    description: "", # Max 5000 characters
-    video_count: 0,
-    created:     Time.utc,
-    updated:     Time.utc,
-    privacy:     privacy,
-    index:       [] of Int64,
+    title:         title.byte_slice(0, 150),
+    id:            plid,
+    author:        user.email,
+    description:   "", # Max 5000 characters
+    thumbnail_url: "",
+    video_count:   0,
+    created:       Time.utc,
+    updated:       Time.utc,
+    privacy:       privacy,
+    index:         [] of Int64,
   })
 
   Invidious::Database::Playlists.insert(playlist)
@@ -261,15 +269,16 @@ end
 
 def subscribe_playlist(user, playlist)
   playlist = InvidiousPlaylist.new({
-    title:       playlist.title.byte_slice(0, 150),
-    id:          playlist.id,
-    author:      user.email,
-    description: "", # Max 5000 characters
-    video_count: playlist.video_count,
-    created:     Time.utc,
-    updated:     playlist.updated,
-    privacy:     PlaylistPrivacy::Private,
-    index:       [] of Int64,
+    title:         playlist.title.byte_slice(0, 150),
+    id:            playlist.id,
+    author:        user.email,
+    description:   "", # Max 5000 characters
+    thumbnail_url: playlist.thumbnail_url,
+    video_count:   playlist.video_count,
+    created:       Time.utc,
+    updated:       playlist.updated,
+    privacy:       PlaylistPrivacy::Private,
+    index:         [] of Int64,
   })
 
   Invidious::Database::Playlists.insert(playlist)
@@ -393,10 +402,10 @@ def fetch_playlist(plid : String)
     ucid:             ucid,
     description:      description_txt,
     description_html: description_html,
+    thumbnail_url:    thumbnail,
     video_count:      video_count,
     views:            views,
     updated:          updated,
-    thumbnail:        thumbnail,
   })
 end
 
