@@ -15,6 +15,7 @@ module Invidious::Database::Playlists
 
     request = <<-SQL
       INSERT INTO playlists
+      (#{InvidiousPlaylist.type_array.join(",")})
       VALUES (#{arg_array(playlist_array)})
     SQL
 
