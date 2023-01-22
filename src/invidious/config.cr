@@ -75,9 +75,13 @@ class Config
   @[YAML::Field(converter: Preferences::URIConverter)]
   property database_url : URI = URI.parse("")
   # Use polling to keep decryption function up to date
-  property decrypt_polling : Bool = true
+  property decrypt_polling : Bool = false
   # Used for crawling channels: threads should check all videos uploaded by a channel
   property full_refresh : Bool = false
+
+  # Jobs config structure. See jobs.cr and jobs/base_job.cr
+  property jobs = Invidious::Jobs::JobsConfig.new
+
   # Used to tell Invidious it is behind a proxy, so links to resources should be https://
   property https_only : Bool?
   # HMAC signing key for CSRF tokens and verifying pubsub subscriptions
@@ -106,6 +110,8 @@ class Config
   property hsts : Bool? = true
   # Disable proxying server-wide: options: 'dash', 'livestreams', 'downloads', 'local'
   property disable_proxy : Bool? | Array(String)? = false
+  # Enable the user notifications for all users
+  property enable_user_notifications : Bool = true
 
   # URL to the modified source code to be easily AGPL compliant
   # Will display in the footer, next to the main source code link
@@ -130,6 +136,9 @@ class Config
   property captcha_key : String? = nil
   # API URL for Anti-Captcha
   property captcha_api_url : String = "https://api.anti-captcha.com"
+
+  # Playlist length limit
+  property playlist_length_limit : Int32 = 500
 
   def disabled?(option)
     case disabled = CONFIG.disable_proxy

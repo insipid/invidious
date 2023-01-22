@@ -295,6 +295,17 @@ https_only: false
 ##
 #admins: [""]
 
+##
+## Enable/Disable the user notifications for all users
+##
+## Note: On large instances, it is recommended to set this option to 'false'
+## in order to reduce the amount of data written to the database, and hence
+## improve the overall performance of the instance.
+##
+## Accepted values: true, false
+## Default: true
+##
+#enable_user_notifications: true
 
 # -----------------------------
 #  Background jobs
@@ -304,10 +315,8 @@ https_only: false
 ## Number of threads to use when crawling channel videos (during
 ## subscriptions update).
 ##
-## Notes:
-##  - Setting this to 0 will disable the channel videos crawl job.
-##  - This setting is overridden if "-c THREADS" or
-##    "--channel-threads=THREADS" are passed on the command line.
+## Notes: This setting is overridden if either "-c THREADS" or
+## "--channel-threads=THREADS" is passed on the command line.
 ##
 ## Accepted values: a positive integer
 ## Default: 1
@@ -335,10 +344,8 @@ full_refresh: false
 ##
 ## Number of threads to use when updating RSS feeds.
 ##
-## Notes:
-##  - Setting this to 0 will disable the channel videos crawl job.
-##  - This setting is overridden if "-f THREADS" or
-##    "--feed-threads=THREADS" are passed on the command line.
+## Notes: This setting is overridden if either "-f THREADS" or
+## "--feed-threads=THREADS" is passed on the command line.
 ##
 ## Accepted values: a positive integer
 ## Default: 1
@@ -349,13 +356,49 @@ feed_threads: 1
 ## Enable/Disable the polling job that keeps the decryption
 ## function (for "secured" videos) up to date.
 ##
-## Note: This part of the code is currently broken, so changing
+## Note: This part of the code generate a small amount of data every minute.
+## This may not be desired if you have bandwidth limits set by your ISP.
+##
+## Note 2: This part of the code is currently broken, so changing
 ## this setting has no impact.
 ##
 ## Accepted values: true, false
-## Default: true
+## Default: false
 ##
-#decrypt_polling: true
+#decrypt_polling: false
+
+
+jobs:
+
+  ## Options for the database cleaning job
+  clear_expired_items:
+
+    ## Enable/Disable job
+    ##
+    ## Accepted values: true, false
+    ## Default: true
+    ##
+    enable: true
+
+  ## Options for the channels updater job
+  refresh_channels:
+
+    ## Enable/Disable job
+    ##
+    ## Accepted values: true, false
+    ## Default: true
+    ##
+    enable: true
+
+  ## Options for the RSS feeds updater job
+  refresh_feeds:
+
+    ## Enable/Disable job
+    ##
+    ## Accepted values: true, false
+    ## Default: true
+    ##
+    enable: true
 
 
 # -----------------------------
@@ -450,7 +493,13 @@ feed_threads: 1
 ##
 #modified_source_code_url: ""
 
-
+##
+## Maximum custom playlist length limit.
+##
+## Accepted values: Integer
+## Default: 500
+##
+#playlist_length_limit: 500
 
 #########################################
 #
@@ -575,10 +624,10 @@ default_user_preferences:
   ##
   ## Enable/Disable dark mode.
   ##
-  ## Accepted values: true, false
-  ## Default: <none>
+  ## Accepted values: "dark", "light", "auto"
+  ## Default: "auto"
   ##
-  #dark_mode:
+  #dark_mode: "auto"
 
   ##
   ## Enable/Disable thin mode (no video thumbnails).
@@ -856,7 +905,7 @@ default_user_preferences:
   ## Default: false
   ##
   #automatic_instance_redirect: false
-  
+
   ##
   ## Show the entire video description by default (when set to 'false',
   ## only the first few lines of the description are shown and a

@@ -56,7 +56,7 @@ struct PlaylistVideo
       json.field "authorUrl", "/channel/#{self.ucid}"
 
       json.field "videoThumbnails" do
-        generate_thumbnails(json, self.id)
+        Invidious::JSONify::APIv1.thumbnails(json, self.id)
       end
 
       if index
@@ -326,7 +326,7 @@ def get_playlist(plid : String)
     if playlist = Invidious::Database::Playlists.select(id: plid)
       return playlist
     else
-      raise InfoException.new("Playlist does not exist.")
+      raise NotFoundException.new("Playlist does not exist.")
     end
   else
     return fetch_playlist(plid)

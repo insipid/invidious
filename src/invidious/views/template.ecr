@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="/css/grids-responsive-min.css?v=<%= ASSET_COMMIT %>">
     <link rel="stylesheet" href="/css/ionicons.min.css?v=<%= ASSET_COMMIT %>">
     <link rel="stylesheet" href="/css/default.css?v=<%= ASSET_COMMIT %>">
+    <script src="/js/_helpers.js?v=<%= ASSET_COMMIT %>"></script>
 </head>
 
 <%
@@ -53,7 +54,7 @@
                         <div class="pure-u-1-4">
                             <a id="notification_ticker" title="<%= translate(locale, "Subscriptions") %>" href="/feed/subscriptions" class="pure-menu-heading">
                                 <% notification_count = env.get("user").as(Invidious::User).notifications.size %>
-                                <% if notification_count > 0 %>
+                                <% if CONFIG.enable_user_notifications && notification_count > 0 %>
                                     <span id="notification_count"><%= notification_count %></span> <i class="icon ion-ios-notifications"></i>
                                 <% else %>
                                     <i class="icon ion-ios-notifications-outline"></i>
@@ -66,8 +67,8 @@
                             </a>
                         </div>
                         <% if env.get("preferences").as(Preferences).show_nick %>
-                            <div class="pure-u-1-4">
-                                <span id="user_name"><%= env.get("user").as(Invidious::User).email %></span>
+                            <div class="pure-u-1-4" style="overflow: hidden; white-space: nowrap;">
+                                <span id="user_name"><%= HTML.escape(env.get("user").as(Invidious::User).email) %></span>
                             </div>
                         <% end %>
                         <div class="pure-u-1-4">
@@ -169,7 +170,9 @@
         }.to_pretty_json
         %>
         </script>
+        <% if CONFIG.enable_user_notifications %>
         <script src="/js/notifications.js?v=<%= ASSET_COMMIT %>"></script>
+        <% end %>
     <% end %>
 </body>
 
