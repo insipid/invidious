@@ -174,7 +174,7 @@ module Invidious::Routes::Playlists
   end
 
   def self.update(env)
-    LOGGER.error("DEBUG: #{env.params.body.inspect}")
+    # LOGGER.error("DEBUG: #{env.params.body.inspect}")
     locale = env.get("preferences").as(Preferences).locale
 
     user = env.get? "user"
