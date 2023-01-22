@@ -16,7 +16,7 @@
 </div>
 
 <div class="pure-g">
-<% items_created.each_with_index do |item, item_index| %>
+<% items_created.each_with_index do |item, playlist_index| %>
     <%= rendered "components/item" %>
 <% end %>
 </div>
@@ -28,7 +28,7 @@
 </div>
 
 <div class="pure-g">
-<% items_saved.each_with_index do |item, item_index| %>
+<% items_saved.each_with_index do |item, playlist_index| %>
     <%= rendered "components/item" %>
 <% end %>
 </div>

@@ -33,7 +33,7 @@
 
 <div class="pure-g">
     <% videos.each_slice(4) do |slice| %>
-            <% slice.each_with_index do |item, item_index| %>
+            <% slice.each_with_index do |item, playlist_index| %>
                 <%= rendered "components/item" %>
             <% end %>
     <% end %>

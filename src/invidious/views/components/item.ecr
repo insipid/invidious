@@ -72,7 +72,7 @@
                 <p dir="auto"><%= HTML.escape(item.title) %></p>
             </a>
             <% if env.request.path == "/edit_playlist" %>
-              <input class="pure-input-1" maxlength="3" name="order" type="text" value="<%= item_index %>">
+              <input class="pure-input-1" maxlength="3" name="order" type="text" value="<%= playlist_index %>">
               <input type="hidden" name="index" value="<%= item.index %>">
             <% end %>
             <div class="video-card-row flexible">

@@ -31,7 +31,7 @@
 </div>
 <%- else -%>
 <div class="pure-g">
-    <%- videos.each_with_index do |item, item_index| -%>
+    <%- videos.each_with_index do |item, playlist_index| -%>
         <%= rendered "components/item" %>
     <%- end -%>
 </div>
