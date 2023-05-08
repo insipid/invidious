@@ -181,6 +181,12 @@ def fetch_youtube_comments(id, cursor, format, locale, thin_mode, region, sort_b
               json.field "content", html_to_content(content_html)
               json.field "contentHtml", content_html
 
+              json.field "isPinned", (node_comment["pinnedCommentBadge"]? != nil)
+              json.field "isSponsor", (node_comment["sponsorCommentBadge"]? != nil)
+              if node_comment["sponsorCommentBadge"]?
+                # Sponsor icon thumbnails always have one object and there's only ever the url property in it
+                json.field "sponsorIconUrl", node_comment.dig("sponsorCommentBadge", "sponsorCommentBadgeRenderer", "customBadge", "thumbnails", 0, "url").to_s
+              end
               json.field "published", published.to_unix
               json.field "publishedText", translate(locale, "`x` ago", recode_date(published, locale))
 
@@ -322,21 +328,32 @@ def template_youtube_comments(comments, locale, thin_mode, is_replies = false)
       end
 
       author_name = HTML.escape(child["author"].as_s)
+      sponsor_icon = ""
       if child["verified"]?.try &.as_bool && child["authorIsChannelOwner"]?.try &.as_bool
         author_name += "&nbsp;<i class=\"icon ion ion-md-checkmark-circle\"></i>"
       elsif child["verified"]?.try &.as_bool
         author_name += "&nbsp;<i class=\"icon ion ion-md-checkmark\"></i>"
       end
+
+      if child["isSponsor"]?.try &.as_bool
+        sponsor_icon = String.build do |str|
+          str << %(<img alt="" )
+          str << %(src="/ggpht) << URI.parse(child["sponsorIconUrl"].as_s).request_target << "\" "
+          str << %(title=") << translate(locale, "Channel Sponsor") << "\" "
+          str << %(width="16" height="16" />)
+        end
+      end
       html << <<-END_HTML
       <div class="pure-g" style="width:100%">
         <div class="channel-profile pure-u-4-24 pure-u-md-2-24">
-          <img loading="lazy" style="margin-right:1em;margin-top:1em;width:90%" src="#{author_thumbnail}">
+          <img loading="lazy" style="margin-right:1em;margin-top:1em;width:90%" src="#{author_thumbnail}" alt="" />
         </div>
         <div class="pure-u-20-24 pure-u-md-22-24">
           <p>
             <b>
               <a class="#{child["authorIsChannelOwner"] == true ? "channel-owner" : ""}" href="#{child["authorUrl"]}">#{author_name}</a>
             </b>
+            #{sponsor_icon}
             <p style="white-space:pre-wrap">#{child["contentHtml"]}</p>
       END_HTML
 
@@ -350,37 +367,30 @@ def template_youtube_comments(comments, locale, thin_mode, is_replies = false)
           html << <<-END_HTML
           <div class="pure-g">
             <div class="pure-u-1 pure-u-md-1-2">
-              <img loading="lazy" style="width:100%" src="/ggpht#{URI.parse(attachment["url"].as_s).request_target}">
+              <img loading="lazy" style="width:100%" src="/ggpht#{URI.parse(attachment["url"].as_s).request_target}" alt="" />
             </div>
           </div>
           END_HTML
         when "video"
-          html << <<-END_HTML
-            <div class="pure-g">
-              <div class="pure-u-1 pure-u-md-1-2">
-                <div style="position:relative;width:100%;height:0;padding-bottom:56.25%;margin-bottom:5px">
-          END_HTML
-
           if attachment["error"]?
             html << <<-END_HTML
+            <div class="pure-g video-iframe-wrapper">
               <p>#{attachment["error"]}</p>
+            </div>
             END_HTML
           else
             html << <<-END_HTML
-              <iframe id='ivplayer' style='position:absolute;width:100%;height:100%;left:0;top:0' src='/embed/#{attachment["videoId"]?}?autoplay=0' style='border:none;'></iframe>
+            <div class="pure-g video-iframe-wrapper">
+              <iframe class="video-iframe" src='/embed/#{attachment["videoId"]?}?autoplay=0'></iframe>
+            </div>
             END_HTML
           end
-
-          html << <<-END_HTML
-                </div>
-              </div>
-            </div>
-          END_HTML
         else nil # Ignore
         end
       end
 
       html << <<-END_HTML
+      <p>
         <span title="#{Time.unix(child["published"].as_i64).to_s(translate(locale, "%A %B %-d, %Y"))}">#{translate(locale, "`x` ago", recode_date(Time.unix(child["published"].as_i64), locale))} #{child["isEdited"] == true ? translate(locale, "(edited)") : ""}</span>
         |
       END_HTML
@@ -399,6 +409,7 @@ def template_youtube_comments(comments, locale, thin_mode, is_replies = false)
 
       html << <<-END_HTML
         <i class="icon ion-ios-thumbs-up"></i> #{number_with_separator(child["likeCount"])}
+      </p>
       END_HTML
 
       if child["creatorHeart"]?
@@ -411,7 +422,7 @@ def template_youtube_comments(comments, locale, thin_mode, is_replies = false)
         html << <<-END_HTML
           <span class="creator-heart-container" title="#{translate(locale, "`x` marked it with a ❤", child["creatorHeart"]["creatorName"].as_s)}">
               <div class="creator-heart">
-                  <img loading="lazy" class="creator-heart-background-hearted" src="#{creator_thumbnail}"></img>
+                  <img loading="lazy" class="creator-heart-background-hearted" src="#{creator_thumbnail}" alt="" />
                   <div class="creator-heart-small-hearted">
                       <div class="icon ion-ios-heart creator-heart-small-container"></div>
                   </div>
@@ -587,7 +598,7 @@ def text_to_parsed_content(text : String) : JSON::Any
       currentNode = {"text" => urlMatch[0], "navigationEndpoint" => {"urlEndpoint" => {"url" => urlMatch[0]}}}
       currentNodes << (JSON.parse(currentNode.to_json))
       # If text remain after match create new simple node with text after match
-      afterNode = {"text" => splittedLastNode.size > 0 ? splittedLastNode[1] : ""}
+      afterNode = {"text" => splittedLastNode.size > 1 ? splittedLastNode[1] : ""}
       currentNodes << (JSON.parse(afterNode.to_json))
     end
 
@@ -618,59 +629,34 @@ def content_to_comment_html(content, video_id : String? = "")
 
     text = HTML.escape(run["text"].as_s)
 
-    if run["navigationEndpoint"]?
-      if url = run["navigationEndpoint"]["urlEndpoint"]?.try &.["url"].as_s
-        url = URI.parse(url)
-        displayed_url = text
-
-        if url.host == "youtu.be"
-          url = "/watch?v=#{url.request_target.lstrip('/')}"
-        elsif url.host.nil? || url.host.not_nil!.ends_with?("youtube.com")
-          if url.path == "/redirect"
-            # Sometimes, links can be corrupted (why?) so make sure to fallback
-            # nicely. See https://github.com/iv-org/invidious/issues/2682
-            url = url.query_params["q"]? || ""
-            displayed_url = url
-          else
-            url = url.request_target
-            displayed_url = "youtube.com#{url}"
-          end
-        end
-
-        text = %(<a href="#{url}">#{reduce_uri(displayed_url)}</a>)
-      elsif watch_endpoint = run["navigationEndpoint"]["watchEndpoint"]?
-        start_time = watch_endpoint["startTimeSeconds"]?.try &.as_i
-        link_video_id = watch_endpoint["videoId"].as_s
-
-        url = "/watch?v=#{link_video_id}"
-        url += "&t=#{start_time}" if !start_time.nil?
-
-        # If the current video ID (passed through from the caller function)
-        # is the same as the video ID in the link, add HTML attributes for
-        # the JS handler function that bypasses page reload.
-        #
-        # See: https://github.com/iv-org/invidious/issues/3063
-        if link_video_id == video_id
-          start_time ||= 0
-          text = %(<a href="#{url}" data-onclick="jump_to_time" data-jump-time="#{start_time}">#{reduce_uri(text)}</a>)
-        else
-          text = %(<a href="#{url}">#{text}</a>)
-        end
-      elsif url = run.dig?("navigationEndpoint", "commandMetadata", "webCommandMetadata", "url").try &.as_s
-        if text.starts_with?(/\s?[@#]/)
-          # Handle "pings" in comments and hasthags differently
-          # See:
-          #  - https://github.com/iv-org/invidious/issues/3038
-          #  - https://github.com/iv-org/invidious/issues/3062
-          text = %(<a href="#{url}">#{text}</a>)
-        else
-          text = %(<a href="#{url}">#{reduce_uri(url)}</a>)
-        end
-      end
+    if navigationEndpoint = run.dig?("navigationEndpoint")
+      text = parse_link_endpoint(navigationEndpoint, text, video_id)
     end
 
     text = "<b>#{text}</b>" if run["bold"]?
+    text = "<s>#{text}</s>" if run["strikethrough"]?
     text = "<i>#{text}</i>" if run["italics"]?
+
+    # check for custom emojis
+    if run["emoji"]?
+      if run["emoji"]["isCustomEmoji"]?.try &.as_bool
+        if emojiImage = run.dig?("emoji", "image")
+          emojiAlt = emojiImage.dig?("accessibility", "accessibilityData", "label").try &.as_s || text
+          emojiThumb = emojiImage["thumbnails"][0]
+          text = String.build do |str|
+            str << %(<img alt=") << emojiAlt << "\" "
+            str << %(src="/ggpht) << URI.parse(emojiThumb["url"].as_s).request_target << "\" "
+            str << %(title=") << emojiAlt << "\" "
+            str << %(width=") << emojiThumb["width"] << "\" "
+            str << %(height=") << emojiThumb["height"] << "\" "
+            str << %(class="channel-emoji" />)
+          end
+        else
+          # Hide deleted channel emoji
+          text = ""
+        end
+      end
+    end
 
     text
   end
