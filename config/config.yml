@@ -419,7 +419,8 @@ feed_threads: 1
 ## Accepted values: a string
 ## Default: <none>
 ##
-#hmac_key:
+hmac_key: Aush0uchahmo6thohp3U
+## apk add pwgen ; pwgen 20 1
 
 ##
 ## List of video IDs where the "download" widget must be
