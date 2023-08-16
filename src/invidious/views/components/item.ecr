@@ -56,6 +56,11 @@
                 <a href="<%= link_url %>"><p dir="auto"><%= HTML.escape(item.title) %></p></a>
             </div>
 
+            <% if env.request.path == "/edit_playlist" && item.is_a?(InvidiousPlaylist) %>
+                <input class="pure-input-1" maxlength="3" name="order" type="text" value="<%= playlist_index %>">
+                <input type="hidden" name="index" value="<%= item.index %>">
+            <% end %>
+
             <div class="video-card-row flexible">
                 <div class="flex-left"><a href="/channel/<%= item.ucid %>">
                     <p class="channel-name" dir="auto"><%= HTML.escape(item.author) %>
