@@ -41,7 +41,7 @@ module Invidious::Database::Playlists
     request = <<-SQL
       UPDATE playlists
       SET title = $1, privacy = $2, description = $3, index = $4, updated = $5, video_count = cardinality(index) + 1
-      WHERE id = $5
+      WHERE id = $6
     SQL
 
     PG_DB.exec(request, title, privacy, description, index, updated, id)
