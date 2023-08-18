@@ -49,12 +49,12 @@
     <div class="h-box">
         <textarea maxlength="5000" name="description" style="margin-top:10px;max-width:100%;height:20vh" class="pure-input-1"><%= playlist.description %></textarea>
     </div>
+
     <input type="hidden" name="csrf_token" value="<%= HTML.escape(csrf_token) %>">
+
+    <div class="h-box">
+        <hr>
+    </div>
+
+    <%= rendered "components/items_paginated" %>
 </form>
-
-<div class="h-box">
-    <hr>
-</div>
-
-
-<%= rendered "components/items_paginated" %>
