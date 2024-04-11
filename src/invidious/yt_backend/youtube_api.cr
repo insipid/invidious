@@ -7,16 +7,19 @@ module YoutubeAPI
 
   private DEFAULT_API_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
 
-  private ANDROID_APP_VERSION = "17.33.42"
-  # github.com/TeamNewPipe/NewPipeExtractor/blob/943b7c033bb9d07ead63ddab4441c287653e4384/extractor/src/main/java/org/schabi/newpipe/extractor/services/youtube/YoutubeParsingHelper.java#L1308
-  private ANDROID_USER_AGENT  = "com.google.android.youtube/17.33.42 (Linux; U; Android 12; US) gzip"
+  # For Android versions, see https://en.wikipedia.org/wiki/Android_version_history
+  private ANDROID_APP_VERSION = "19.09.36"
+  private ANDROID_USER_AGENT  = "com.google.android.youtube/19.09.36 (Linux; U; Android 12; US) gzip"
   private ANDROID_SDK_VERSION = 31_i64
   private ANDROID_VERSION     = "12"
-  private IOS_APP_VERSION     = "17.33.2"
-  # github.com/TeamNewPipe/NewPipeExtractor/blob/943b7c033bb9d07ead63ddab4441c287653e4384/extractor/src/main/java/org/schabi/newpipe/extractor/services/youtube/YoutubeParsingHelper.java#L1330
-  private IOS_USER_AGENT = "com.google.ios.youtube/17.33.2 (iPhone14,5; U; CPU iOS 15_6 like Mac OS X;)"
-  # github.com/TeamNewPipe/NewPipeExtractor/blob/943b7c033bb9d07ead63ddab4441c287653e4384/extractor/src/main/java/org/schabi/newpipe/extractor/services/youtube/YoutubeParsingHelper.java#L1224
-  private IOS_VERSION     = "15.6.0.19G71"
+
+  # For Apple device names, see https://gist.github.com/adamawolf/3048717
+  # For iOS versions, see https://en.wikipedia.org/wiki/IOS_version_history#Releases,
+  # then go to the dedicated article of the major version you want.
+  private IOS_APP_VERSION = "19.09.3"
+  private IOS_USER_AGENT  = "com.google.ios.youtube/19.09.3 (iPhone14,5; U; CPU iOS 17_4 like Mac OS X;)"
+  private IOS_VERSION     = "17.4.0.21E219" # Major.Minor.Patch.Build
+
   private WINDOWS_VERSION = "10.0"
 
   # Enumerate used to select one of the clients supported by the API
@@ -43,7 +46,7 @@ module YoutubeAPI
     ClientType::Web => {
       name:       "WEB",
       name_proto: "1",
-      version:    "2.20221118.01.00",
+      version:    "2.20240304.00.00",
       api_key:    DEFAULT_API_KEY,
       screen:     "WATCH_FULL_SCREEN",
       os_name:    "Windows",
@@ -53,7 +56,7 @@ module YoutubeAPI
     ClientType::WebEmbeddedPlayer => {
       name:       "WEB_EMBEDDED_PLAYER",
       name_proto: "56",
-      version:    "1.20220803.01.00",
+      version:    "1.20240303.00.00",
       api_key:    DEFAULT_API_KEY,
       screen:     "EMBED",
       os_name:    "Windows",
@@ -63,7 +66,7 @@ module YoutubeAPI
     ClientType::WebMobile => {
       name:       "MWEB",
       name_proto: "2",
-      version:    "2.20220805.01.00",
+      version:    "2.20240304.08.00",
       api_key:    DEFAULT_API_KEY,
       os_name:    "Android",
       os_version: ANDROID_VERSION,
@@ -72,7 +75,7 @@ module YoutubeAPI
     ClientType::WebScreenEmbed => {
       name:       "WEB",
       name_proto: "1",
-      version:    "2.20220804.00.00",
+      version:    "2.20240304.00.00",
       api_key:    DEFAULT_API_KEY,
       screen:     "EMBED",
       os_name:    "Windows",
@@ -97,7 +100,7 @@ module YoutubeAPI
       name:       "ANDROID_EMBEDDED_PLAYER",
       name_proto: "55",
       version:    ANDROID_APP_VERSION,
-      api_key:    DEFAULT_API_KEY,
+      api_key:    "AIzaSyCjc_pVEDi4qsv5MtC2dMXzpIaDoRFLsxw",
     },
     ClientType::AndroidScreenEmbed => {
       name:                "ANDROID",
@@ -141,9 +144,9 @@ module YoutubeAPI
     ClientType::IOSMusic => {
       name:         "IOS_MUSIC",
       name_proto:   "26",
-      version:      "5.21",
+      version:      "6.42",
       api_key:      "AIzaSyBAETezhkwP0ZWA02RsqT1zu78Fpt0bC_s",
-      user_agent:   "com.google.ios.youtubemusic/5.21 (iPhone14,5; U; CPU iOS 15_6 like Mac OS X;)",
+      user_agent:   "com.google.ios.youtubemusic/6.42 (iPhone14,5; U; CPU iOS 17_4 like Mac OS X;)",
       device_make:  "Apple",
       device_model: "iPhone14,5",
       os_name:      "iPhone",
@@ -156,7 +159,7 @@ module YoutubeAPI
     ClientType::TvHtml5 => {
       name:       "TVHTML5",
       name_proto: "7",
-      version:    "7.20220325",
+      version:    "7.20240304.10.00",
       api_key:    DEFAULT_API_KEY,
     },
     ClientType::TvHtml5ScreenEmbed => {
@@ -556,6 +559,30 @@ module YoutubeAPI
   end
 
   ####################################################################
+  # get_transcript(params, client_config?)
+  #
+  # Requests the youtubei/v1/get_transcript endpoint with the required headers
+  # and POST data in order to get a JSON reply.
+  #
+  # The requested data is a specially encoded protobuf string that denotes the specific language requested.
+  #
+  # An optional ClientConfig parameter can be passed, too (see
+  # `struct ClientConfig` above for more details).
+  #
+
+  def get_transcript(
+    params : String,
+    client_config : ClientConfig | Nil = nil
+  ) : Hash(String, JSON::Any)
+    data = {
+      "context" => self.make_context(client_config),
+      "params"  => params,
+    }
+
+    return self._post_json("/youtubei/v1/get_transcript", data, client_config)
+  end
+
+  ####################################################################
   # _post_json(endpoint, data, client_config?)
   #
   # Internal function that does the actual request to youtube servers
@@ -593,17 +620,9 @@ module YoutubeAPI
     LOGGER.trace("YoutubeAPI: POST data: #{data}")
 
     # Send the POST request
-    if {{ !flag?(:disable_quic) }} && CONFIG.use_quic
-      # Using QUIC client
-      body = YT_POOL.client(client_config.proxy_region,
-        &.post(url, headers: headers, body: data.to_json)
-      ).body
-    else
-      # Using HTTP client
-      body = YT_POOL.client(client_config.proxy_region) do |client|
-        client.post(url, headers: headers, body: data.to_json) do |response|
-          self._decompress(response.body_io, response.headers["Content-Encoding"]?)
-        end
+    body = YT_POOL.client(client_config.proxy_region) do |client|
+      client.post(url, headers: headers, body: data.to_json) do |response|
+        self._decompress(response.body_io, response.headers["Content-Encoding"]?)
       end
     end
 

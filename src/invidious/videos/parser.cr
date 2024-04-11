@@ -55,8 +55,7 @@ def extract_video_info(video_id : String, proxy_region : String? = nil)
   client_config = YoutubeAPI::ClientConfig.new(proxy_region: proxy_region)
 
   # Fetch data from the player endpoint
-  # 8AEB param is used to fetch YouTube stories
-  player_response = YoutubeAPI.player(video_id: video_id, params: "8AEB", client_config: client_config)
+  player_response = YoutubeAPI.player(video_id: video_id, params: "", client_config: client_config)
 
   playability_status = player_response.dig?("playabilityStatus", "status").try &.as_s
 
@@ -78,7 +77,16 @@ def extract_video_info(video_id : String, proxy_region : String? = nil)
   elsif video_id != player_response.dig("videoDetails", "videoId")
     # YouTube may return a different video player response than expected.
     # See: https://github.com/TeamNewPipe/NewPipe/issues/8713
-    raise VideoNotAvailableException.new("The video returned by YouTube isn't the requested one. (WEB client)")
+    # Line to be reverted if one day we solve the video not available issue.
+
+    # Although technically not a call to /videoplayback the fact that YouTube is returning the
+    # wrong video means that we should count it as a failure.
+    get_playback_statistic()["totalRequests"] += 1
+
+    return {
+      "version" => JSON::Any.new(Video::SCHEMA_VERSION.to_i64),
+      "reason"  => JSON::Any.new("Can't load the video on this Invidious instance. YouTube is currently trying to block Invidious instances. <a href=\"https://github.com/iv-org/invidious/issues/3822\">Click here for more info about the issue.</a>"),
+    }
   else
     reason = nil
   end
@@ -115,6 +123,9 @@ def extract_video_info(video_id : String, proxy_region : String? = nil)
 
   # Replace player response and reset reason
   if !new_player_response.nil?
+    # Preserve storyboard data before replacement
+    new_player_response["storyboards"] = player_response["storyboards"] if player_response["storyboards"]?
+
     player_response = new_player_response
     params.delete("reason")
   end
@@ -131,8 +142,9 @@ end
 
 def try_fetch_streaming_data(id : String, client_config : YoutubeAPI::ClientConfig) : Hash(String, JSON::Any)?
   LOGGER.debug("try_fetch_streaming_data: [#{id}] Using #{client_config.client_type} client.")
-  # 8AEB param is used to fetch YouTube stories
-  response = YoutubeAPI.player(video_id: id, params: "8AEB", client_config: client_config)
+  # CgIIAdgDAQ%3D%3D is a workaround for streaming URLs that returns a 403.
+  # https://github.com/LuanRT/YouTube.js/pull/624
+  response = YoutubeAPI.player(video_id: id, params: "CgIIAdgDAQ%3D%3D", client_config: client_config)
 
   playability_status = response["playabilityStatus"]["status"]
   LOGGER.debug("try_fetch_streaming_data: [#{id}] Got playabilityStatus == #{playability_status}.")

@@ -20,7 +20,7 @@ def produce_channel_videos_continuation(ucid, page = 1, auto_generated = nil, so
     case sort_by
     when "newest"  then 1_i64
     when "popular" then 2_i64
-    when "oldest"  then 3_i64 # Broken as of 10/2022 :c
+    when "oldest"  then 4_i64
     else                1_i64 # Fallback to "newest"
     end
 
@@ -60,12 +60,6 @@ def produce_channel_videos_continuation(ucid, page = 1, auto_generated = nil, so
     .try { |i| URI.encode_www_form(i) }
 
   return continuation
-end
-
-# Used in bypass_captcha_job.cr
-def produce_channel_videos_url(ucid, page = 1, auto_generated = nil, sort_by = "newest", v2 = false)
-  continuation = produce_channel_videos_continuation(ucid, page, auto_generated, sort_by, v2)
-  return "/browse_ajax?continuation=#{continuation}&gl=US&hl=en"
 end
 
 module Invidious::Channel::Tabs
