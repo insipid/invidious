@@ -121,10 +121,4 @@
 <script src="/js/playlist_widget.js?v=<%= ASSET_COMMIT %>"></script>
 <% end %>
 
-<div class="pure-g">
-<% videos.each_with_index do |item, playlist_index| %>
-    <%= rendered "components/item" %>
-<% end %>
-</div>
-
 <%= rendered "components/items_paginated" %>

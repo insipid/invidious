@@ -31,12 +31,4 @@
 </script>
 <script src="/js/playlist_widget.js?v=<%= ASSET_COMMIT %>"></script>
 
-<div class="pure-g">
-    <% videos.each_slice(4) do |slice| %>
-            <% slice.each_with_index do |item, playlist_index| %>
-                <%= rendered "components/item" %>
-            <% end %>
-    <% end %>
-</div>
-
 <%= rendered "components/items_paginated" %>
