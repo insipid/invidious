@@ -210,16 +210,21 @@ module Invidious::Routes::Playlists
     title = env.params.body["title"]?.try &.delete("<>") || ""
     privacy = PlaylistPrivacy.parse(env.params.body["privacy"]? || "Public")
     description = env.params.body["description"]?.try &.delete("\r") || ""
+    item_orders = env.params.body.fetch_all("order")
+    item_indexes = env.params.body.fetch_all("index")
+
+    index = item_orders.zip(item_indexes).sort { |x, y| x[0] <=> y[0] }.map { |x| x[1].to_i64 }
 
     if title != playlist.title ||
        privacy != playlist.privacy ||
-       description != playlist.description
+       description != playlist.description ||
+       index != playlist.index
       updated = Time.utc
     else
       updated = playlist.updated
     end
 
-    Invidious::Database::Playlists.update(plid, title, privacy, description, updated)
+    Invidious::Database::Playlists.update(plid, title, privacy, description, index, updated)
 
     env.redirect "/playlist?list=#{plid}"
   end

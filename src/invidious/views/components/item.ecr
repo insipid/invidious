@@ -197,6 +197,11 @@
                 <%= rendered "components/video-context-buttons" %>
             </div>
 
+            <% if item.is_a?(PlaylistVideo) && env.request.path == "/edit_playlist" %>
+              <input class="pure-input-1" maxlength="3" name="order" type="text" value="<%= playlist_index %>">
+              <input type="hidden" name="index" value="<%= item.index %>">
+            <% end %>
+
             <div class="video-card-row flexible">
                 <div class="flex-left">
                     <% if item.responds_to?(:premiere_timestamp) && item.premiere_timestamp.try &.> Time.utc %>
