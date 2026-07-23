@@ -39,8 +39,6 @@
     "User ID": "ID корисника",
     "Password": "Лозинка",
     "Time (h:mm:ss):": "Време (ч:мм:сс):",
-    "Text CAPTCHA": "Текст CAPTCHA",
-    "Image CAPTCHA": "Слика CAPTCHA",
     "Sign In": "Пријава",
     "Register": "Регистрација",
     "E-mail": "Имејл",
@@ -60,7 +58,7 @@
     "reddit": "Reddit",
     "preferences_captions_label": "Подразумевани титлови: ",
     "Fallback captions: ": "Резервни титлови: ",
-    "preferences_related_videos_label": "Прикажи повезане видео снимке: ",
+    "preferences_related_videos_label": "Прикажи сродне видео снимке: ",
     "preferences_annotations_label": "Подразумевано прикажи напомене: ",
     "preferences_category_visual": "Визуелна подешавања",
     "preferences_player_style_label": "Стил плејера: ",
@@ -246,7 +244,7 @@
     "preferences_locale_label": "Језик: ",
     "Persian": "Персијски",
     "View `x` comments": {
-        "": "Погледај `x` коментаре",
+        "": "Погледај `x` коментара",
         "([^.,0-9]|^)1([^.,0-9]|$)": "Погледај `x` коментар"
     },
     "search_filters_type_option_channel": "Канал",
@@ -404,7 +402,7 @@
     "generic_count_months_0": "{{count}} месец",
     "generic_count_months_1": "{{count}} месеца",
     "generic_count_months_2": "{{count}} месеци",
-    "search_message_use_another_instance": " Такође, можете <a href=\"`x`\">претраживати на другој инстанци</a>.",
+    "search_message_use_another_instance": "Такође, можете <a href=\"`x`\">претраживати на другој инстанци</a>.",
     "generic_subscribers_count_0": "{{count}} пратилац",
     "generic_subscribers_count_1": "{{count}} пратиоца",
     "generic_subscribers_count_2": "{{count}} пратилаца",
@@ -513,5 +511,13 @@
     "Add to playlist: ": "Додајте на плејлисту: ",
     "carousel_skip": "Прескочи карусел",
     "The Popular feed has been disabled by the administrator.": "Администратор је онемогућио фид „Популарно“.",
-    "carousel_slide": "Слајд {{current}} од {{total}}"
+    "carousel_slide": "Слајд {{current}} од {{total}}",
+    "preferences_preload_label": "Унапред учитај податке о видео снимку: ",
+    "Filipino (auto-generated)": "Филипински (аутоматски генерисано)",
+    "channel_tab_courses_label": "Курсеви",
+    "First page": "Прва страница",
+    "channel_tab_posts_label": "Објаве",
+    "timeline_parse_error_show_technical_details": "Прикажи техничке детаље",
+    "timeline_parse_error_placeholder_heading": "Није могуће рашчланити предмет",
+    "timeline_parse_error_placeholder_message": "Invidious је наишао на грешку приликом покушаја рашчлањивања овог предмета. За више информација погледајте испод:"
 }

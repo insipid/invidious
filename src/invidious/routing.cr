@@ -46,6 +46,7 @@ module Invidious::Routing
     self.register_api_v1_routes
     self.register_api_manifest_routes
     self.register_video_playback_routes
+    self.register_companion_routes
   end
 
   # -------------------
@@ -120,8 +121,10 @@ module Invidious::Routing
     get "/channel/:ucid/streams", Routes::Channels, :streams
     get "/channel/:ucid/podcasts", Routes::Channels, :podcasts
     get "/channel/:ucid/releases", Routes::Channels, :releases
+    get "/channel/:ucid/courses", Routes::Channels, :courses
     get "/channel/:ucid/playlists", Routes::Channels, :playlists
     get "/channel/:ucid/community", Routes::Channels, :community
+    get "/channel/:ucid/posts", Routes::Channels, :community
     get "/channel/:ucid/channels", Routes::Channels, :channels
     get "/channel/:ucid/about", Routes::Channels, :about
 
@@ -182,11 +185,12 @@ module Invidious::Routing
     get "/opensearch.xml", Routes::Search, :opensearch
     get "/results", Routes::Search, :results
     get "/search", Routes::Search, :search
+    post "/search", Routes::Search, :search
     get "/hashtag/:hashtag", Routes::Search, :hashtag
   end
 
   # -------------------
-  #  Media proxy routes
+  #  Proxy routes
   # -------------------
 
   def register_api_manifest_routes
@@ -219,6 +223,16 @@ module Invidious::Routing
     get "/s_p/:id/:name", Routes::Images, :s_p_image
     get "/yts/img/:name", Routes::Images, :yts_image
     get "/vi/:id/:name", Routes::Images, :thumbnails
+    get "/pl_c/:id/:name", Routes::Images, :pl_c_image
+    get "/tvfilm_banner/:id/:name", Routes::Images, :tvfilm_banner_image
+  end
+
+  def register_companion_routes
+    if CONFIG.invidious_companion.present?
+      get "/companion/*", Routes::Companion, :get_companion
+      post "/companion/*", Routes::Companion, :post_companion
+      options "/companion/*", Routes::Companion, :options_companion
+    end
   end
 
   # -------------------
@@ -236,6 +250,7 @@ module Invidious::Routing
       get "/api/v1/annotations/:id", {{namespace}}::Videos, :annotations
       get "/api/v1/comments/:id", {{namespace}}::Videos, :comments
       get "/api/v1/clips/:id", {{namespace}}::Videos, :clips
+      get "/api/v1/transcripts/:id", {{namespace}}::Videos, :transcripts
 
       # Feeds
       get "/api/v1/trending", {{namespace}}::Feeds, :trending
@@ -243,17 +258,18 @@ module Invidious::Routing
 
       # Channels
       get "/api/v1/channels/:ucid", {{namespace}}::Channels, :home
+      get "/api/v1/channels/:ucid/latest", {{namespace}}::Channels, :latest
+      get "/api/v1/channels/:ucid/videos", {{namespace}}::Channels, :videos
       get "/api/v1/channels/:ucid/shorts", {{namespace}}::Channels, :shorts
       get "/api/v1/channels/:ucid/streams", {{namespace}}::Channels, :streams
       get "/api/v1/channels/:ucid/podcasts", {{namespace}}::Channels, :podcasts
       get "/api/v1/channels/:ucid/releases", {{namespace}}::Channels, :releases
-
+      get "/api/v1/channels/:ucid/courses", {{namespace}}::Channels, :courses
+      get "/api/v1/channels/:ucid/playlists", {{namespace}}::Channels, :playlists
+      get "/api/v1/channels/:ucid/community", {{namespace}}::Channels, :community
+      get "/api/v1/channels/:ucid/posts", {{namespace}}::Channels, :community
       get "/api/v1/channels/:ucid/channels", {{namespace}}::Channels, :channels
-
-      {% for route in {"videos", "latest", "playlists", "community", "search"} %}
-        get "/api/v1/channels/#{{{route}}}/:ucid", {{namespace}}::Channels, :{{route}}
-        get "/api/v1/channels/:ucid/#{{{route}}}", {{namespace}}::Channels, :{{route}}
-      {% end %}
+      get "/api/v1/channels/:ucid/search", {{namespace}}::Channels, :search
 
       # Posts
       get "/api/v1/post/:id", {{namespace}}::Channels, :post
@@ -270,11 +286,6 @@ module Invidious::Routing
 
 
       # Authenticated
-
-      # The notification APIs cannot be extracted yet! They require the *local* notifications constant defined in invidious.cr
-      #
-      # Invidious::Routing.get "/api/v1/auth/notifications", {{namespace}}::Authenticated, :notifications
-      # Invidious::Routing.post "/api/v1/auth/notifications", {{namespace}}::Authenticated, :notifications
 
       get "/api/v1/auth/preferences", {{namespace}}::Authenticated, :get_preferences
       post "/api/v1/auth/preferences", {{namespace}}::Authenticated, :set_preferences

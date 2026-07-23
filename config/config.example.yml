@@ -1,12 +1,19 @@
 #########################################
 #
-#  Database configuration
+#  Database and other external servers
 #
 #########################################
 
 ##
 ## Database configuration with separate parameters.
 ## This setting is MANDATORY, unless 'database_url' is used.
+##
+## Note: The 'db' setting allows the use of UNIX
+## sockets. To do so, set 'host' to ""
+## E.g:
+##    password: kemal
+##    host: ""
+##    port: 5432
 ##
 db:
   user: kemal
@@ -40,7 +47,54 @@ db:
 ##
 #check_tables: false
 
+##
+## Invidious companion is an external program
+## for loading the video streams from YouTube servers.
+##
+## When this setting is commented out, Invidious companion is not used.
+## Otherwise, Invidious will proxy the requests to Invidious companion.
+##
+## Note: multiple URL can be configured. In this case, Invidious will
+## randomly pick one every time video data needs to be retrieved. This
+## URL is then kept in the video metadata cache to allow video playback
+## to work. Once said cache has expired, requesting that video's data
+## again will cause a new companion URL to be picked.
+##
+## The parameter private_url is required for the internal communication
+## between Invidious companion and Invidious.
+##
+## The optional parameter public_url is the public URL from which
+## Invidious companion is listening to the requests from the user(s).
+## When this setting is commented out, Invidious proxy all requests to
+## Invidious companion. Useful for simple setups.
+## Otherwise, requests from the user(s) will reach Invidious companion directly.
+## And you will need to configure a reverse proxy with separate routes
+## for Invidious and Invidious companion.
+## Read the post-install documentation for advanced reverse proxy
+## documentation: https://docs.invidious.io/installation/#post-install-configuration
+##
+## Accepted values: "http(s)://<IP-HOSTNAME>:<Port>"
+## Default: <none>
+##
+#invidious_companion:
+#  - private_url: "http://localhost:8282/companion"
+#  # Uncomment for advanced reverse proxy configuration (see above).
+#  # public_url: "http://localhost:8282/companion"
 
+##
+## API key for Invidious companion, used for securing the communication
+## between Invidious and Invidious companion.
+## The key needs to be exactly 16 characters long.
+##
+## Note: This parameter is mandatory when Invidious companion is enabled
+## and should be a random string.
+## Such random string can be generated on linux with the following
+## command: `pwgen 16 1`
+##
+## Accepted values: a string (of length 16)
+## Default: <none>
+##
+#invidious_companion_key: "CHANGE_ME!!"
 
 #########################################
 #
@@ -98,6 +152,26 @@ db:
 domain:
 
 ##
+## List of alternative domains where the invidious instance is being served.
+## This needs to be set in order to be able to login and update user preferences
+## when using a domain that is not the same as the `domain` configuration,
+## like a .`onion` address, `.i2p` address, `.b32.i2p` address, etc.
+##
+## It will detect the alternative domain trough the `X-Forwarded-Host` header.
+## https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/X-Forwarded-Host
+##
+## Accepted values: a list of fully qualified domain names (FQDN)
+## Default: <none>
+##
+## Example:
+## alternative_domains:
+##   - invidious.example.com
+##   - inv.example.com
+##   - videos.example.com
+##
+alternative_domains:
+
+##
 ## Tell Invidious that it is behind a proxy that provides only
 ## HTTPS, so all links must use the https:// scheme. This
 ## setting MUST be set to true if invidious is behind a
@@ -117,6 +191,19 @@ https_only: false
 ##
 #hsts: true
 
+##
+## Path and permissions of a UNIX socket to listen on for incoming connections.
+##
+## Note: Enabling socket will make invidious stop listening on the address
+## specified by 'host_binding' and 'port'.
+##
+## Accepted values: Any path to a new file (that doesn't exist yet) and its
+## permissions following the UNIX octal convention.
+## Default: <none>
+##
+#socket_binding:
+#  path: /tmp/invidious.sock
+#  permissions: 777
 
 # -----------------------------
 #  Network (outbound)
@@ -140,7 +227,6 @@ https_only: false
 ##
 #pool_size: 100
 
-
 ##
 ## Additional cookies to be sent when requesting the youtube API.
 ##
@@ -160,6 +246,20 @@ https_only: false
 ##
 #force_resolve:
 
+##
+## Configuration for using a HTTP proxy
+## If unset, then no HTTP proxy will be used.
+## Proxy type supported: HTTP, HTTPS
+##
+## This is not used for loading the video streams from YouTube servers (circumvent YouTube restrictions)
+## Please instead configure the proxy in Invidious companion:
+## https://github.com/iv-org/invidious-companion/blob/master/config/config.example.toml
+##
+#http_proxy:
+#  user:
+#  password:
+#  host:
+#  port:
 
 ##
 ## Use Innertube's transcripts API instead of timedtext for closed captions
@@ -172,7 +272,6 @@ https_only: false
 ## Default: false
 ##
 # use_innertube_for_captions: false
-
 
 # -----------------------------
 #  Logging
@@ -197,6 +296,17 @@ https_only: false
 ##
 #log_level: Info
 
+##
+## Enables colors in logs. Useful for debugging purposes
+## This is overridden if "-k" or "--colorize"
+## are passed on the command line.
+## Colors are also disabled if the environment variable
+## NO_COLOR is present and has any value
+##
+## Accepted values: true, false
+## Default: true
+##
+#colorize_logs: false
 
 # -----------------------------
 #  Features
@@ -230,7 +340,6 @@ https_only: false
 ## Default: false
 ##
 #statistics_enabled: false
-
 
 # -----------------------------
 #  Users and accounts
@@ -344,26 +453,24 @@ full_refresh: false
 feed_threads: 1
 
 ##
-## Enable/Disable the polling job that keeps the decryption
-## function (for "secured" videos) up to date.
+## Setting to disable easy to abuse API endpoints that can
+## be spammed and therefore blocking your Invidious instance.
 ##
-## Note: This part of the code generate a small amount of data every minute.
-## This may not be desired if you have bandwidth limits set by your ISP.
+## Useful for public instance maintainers.
 ##
-## Note 2: This part of the code is currently broken, so changing
-## this setting has no impact.
+## Notes: The following API endpoints will be disabled:
+##  - /api/v1/videos
+##  - /api/v1/clips
+##  - /api/v1/transcripts
 ##
 ## Accepted values: true, false
 ## Default: false
 ##
-#decrypt_polling: false
-
+disable_abusable_api: false
 
 jobs:
-
   ## Options for the database cleaning job
   clear_expired_items:
-
     ## Enable/Disable job
     ##
     ## Accepted values: true, false
@@ -373,7 +480,6 @@ jobs:
 
   ## Options for the channels updater job
   refresh_channels:
-
     ## Enable/Disable job
     ##
     ## Accepted values: true, false
@@ -383,14 +489,12 @@ jobs:
 
   ## Options for the RSS feeds updater job
   refresh_feeds:
-
     ## Enable/Disable job
     ##
     ## Accepted values: true, false
     ## Default: true
     ##
     enable: true
-
 
 # -----------------------------
 #  Miscellaneous
@@ -590,7 +694,6 @@ default_user_preferences:
   ##
   #captions: ["", "", ""]
 
-
   # -----------------------------
   #  Interface
   # -----------------------------
@@ -692,10 +795,25 @@ default_user_preferences:
   ##
   #related_videos: true
 
-
   # -----------------------------
   #  Video player behavior
   # -----------------------------
+
+  ##
+  ## This option controls the value of the HTML5 <video> element's
+  ## "preload" attribute.
+  ##
+  ## If set to 'false', no video data will be loaded until the user
+  ## explicitly starts the video by clicking the "Play" button.
+  ## If set to 'true', the web browser will buffer some video data
+  ## while the page is loading.
+  ##
+  ## See: https://www.w3schools.com/tags/att_video_preload.asp
+  ##
+  ## Accepted values: true, false
+  ## Default: true
+  ##
+  #preload: true
 
   ##
   ## Automatically play videos on page load.
@@ -740,7 +858,6 @@ default_user_preferences:
   ##
   #video_loop: false
 
-
   # -----------------------------
   #  Video playback settings
   # -----------------------------
@@ -749,14 +866,14 @@ default_user_preferences:
   ## Default video quality.
   ##
   ## Accepted values: dash, hd720, medium, small
-  ## Default: hd720
+  ## Default: dash
   ##
-  #quality: hd720
+  #quality: dash
 
   ##
   ## Default dash video quality.
   ##
-  ## Note: this setting only takes effet if the
+  ## Note: this setting only takes effect if the
   ## 'quality' parameter is set to "dash".
   ##
   ## Accepted values:
@@ -791,7 +908,7 @@ default_user_preferences:
   ## Default: true
   ##
   #vr_mode: true
-  
+
   ##
   ## Save the playback position
   ## Allow to continue watching at the previous position when
@@ -851,7 +968,6 @@ default_user_preferences:
   ## Default: published
   ##
   #sort: published
-
 
   # -----------------------------
   #  Miscellaneous

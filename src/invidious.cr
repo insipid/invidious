@@ -17,12 +17,11 @@
 require "digest/md5"
 require "file_utils"
 
-# Require kemal, kilt, then our own overrides
+# Require kemal, then our own overrides
 require "kemal"
-require "kilt"
-require "./ext/kemal_content_for.cr"
 require "./ext/kemal_static_file_handler.cr"
 
+require "http_proxy"
 require "athena-negotiation"
 require "openssl/hmac"
 require "option_parser"
@@ -48,7 +47,8 @@ require "./invidious/channels/*"
 require "./invidious/user/*"
 require "./invidious/search/*"
 require "./invidious/routes/**"
-require "./invidious/jobs/**"
+require "./invidious/jobs/base_job"
+require "./invidious/jobs/*"
 
 # Declare the base namespace for invidious
 module Invidious
@@ -60,24 +60,20 @@ alias IV = Invidious
 CONFIG   = Config.load
 HMAC_KEY = CONFIG.hmac_key
 
-PG_DB       = DB.open CONFIG.database_url
-ARCHIVE_URL = URI.parse("https://archive.org")
-PUBSUB_URL  = URI.parse("https://pubsubhubbub.appspot.com")
-REDDIT_URL  = URI.parse("https://www.reddit.com")
-YT_URL      = URI.parse("https://www.youtube.com")
-HOST_URL    = make_host_url(Kemal.config)
-
-CHARS_SAFE         = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
-TEST_IDS           = {"AgbeGFYluEA", "BaW_jenozKc", "a9LDPn-MO4I", "ddFvjfvPnqk", "iqKdEhx-dD4"}
+PG_DB = begin
+  DB.open CONFIG.database_url
+rescue ex
+  puts "Failed to connect to PostgreSQL database: #{ex.cause.try &.message}"
+  puts "Check your 'config.yml' database settings or PostgreSQL settings."
+  exit(1)
+end
+HOST_URL           = make_host_url(Kemal.config)
 MAX_ITEMS_PER_PAGE = 1500
-
-REQUEST_HEADERS_WHITELIST  = {"accept", "accept-encoding", "cache-control", "content-length", "if-none-match", "range"}
-RESPONSE_HEADERS_BLACKLIST = {"access-control-allow-origin", "alt-svc", "server"}
-HTTP_CHUNK_SIZE            = 10485760 # ~10MB
 
 CURRENT_BRANCH  = {{ "#{`git branch | sed -n '/* /s///p'`.strip}" }}
 CURRENT_COMMIT  = {{ "#{`git rev-list HEAD --max-count=1 --abbrev-commit`.strip}" }}
 CURRENT_VERSION = {{ "#{`git log -1 --format=%ci | awk '{print $1}' | sed s/-/./g`.strip}" }}
+CURRENT_TAG     = {{ "#{`git tag --points-at HEAD`.strip}" }}
 
 # This is used to determine the `?v=` on the end of file URLs (for cache busting). We
 # only need to expire modified assets, so we can use this to find the last commit that changes
@@ -90,7 +86,15 @@ SOFTWARE = {
   "branch"  => "#{CURRENT_BRANCH}",
 }
 
-YT_POOL = YoutubeConnectionPool.new(YT_URL, capacity: CONFIG.pool_size)
+YT_POOL = YoutubeConnectionPool.new(URI.parse("https://www.youtube.com"), capacity: CONFIG.pool_size)
+
+# Image request pool
+
+GGPHT_POOL = YoutubeConnectionPool.new(URI.parse("https://yt3.ggpht.com"), capacity: CONFIG.pool_size)
+
+COMPANION_POOL = CompanionConnectionPool.new(
+  capacity: CONFIG.pool_size
+)
 
 # CLI
 Kemal.config.extra_options do |parser|
@@ -117,6 +121,9 @@ Kemal.config.extra_options do |parser|
   parser.on("-l LEVEL", "--log-level=LEVEL", "Log level, one of #{LogLevel.values} (default: #{CONFIG.log_level})") do |log_level|
     CONFIG.log_level = LogLevel.parse(log_level)
   end
+  parser.on("-k", "--colorize", "Colorize logs") do
+    CONFIG.colorize_logs = true
+  end
   parser.on("-v", "--version", "Print version") do
     puts SOFTWARE.to_pretty_json
     exit
@@ -133,7 +140,7 @@ if CONFIG.output.upcase != "STDOUT"
   FileUtils.mkdir_p(File.dirname(CONFIG.output))
 end
 OUTPUT = CONFIG.output.upcase == "STDOUT" ? STDOUT : File.open(CONFIG.output, mode: "a")
-LOGGER = Invidious::LogHandler.new(OUTPUT, CONFIG.log_level)
+LOGGER = Invidious::LogHandler.new(OUTPUT, CONFIG.log_level, CONFIG.colorize_logs)
 
 # Check table integrity
 Invidious::Database.check_integrity(CONFIG)
@@ -163,11 +170,6 @@ if CONFIG.feed_threads > 0
   Invidious::Jobs.register Invidious::Jobs::RefreshFeedsJob.new(PG_DB)
 end
 
-DECRYPT_FUNCTION = DecryptFunction.new(CONFIG.decrypt_polling)
-if CONFIG.decrypt_polling
-  Invidious::Jobs.register Invidious::Jobs::UpdateDecryptFunctionJob.new
-end
-
 if CONFIG.statistics_enabled
   Invidious::Jobs.register Invidious::Jobs::StatisticsRefreshJob.new(PG_DB, SOFTWARE)
 end
@@ -180,10 +182,13 @@ if CONFIG.popular_enabled
   Invidious::Jobs.register Invidious::Jobs::PullPopularVideosJob.new(PG_DB)
 end
 
-CONNECTION_CHANNEL = ::Channel({Bool, ::Channel(PQ::Notification)}).new(32)
-Invidious::Jobs.register Invidious::Jobs::NotificationJob.new(CONNECTION_CHANNEL, CONFIG.database_url)
+NOTIFICATION_CHANNEL = ::Channel(VideoNotification).new(32)
+CONNECTION_CHANNEL   = ::Channel({Bool, ::Channel(PQ::Notification)}).new(32)
+Invidious::Jobs.register Invidious::Jobs::NotificationJob.new(NOTIFICATION_CHANNEL, CONNECTION_CHANNEL, CONFIG.database_url)
 
 Invidious::Jobs.register Invidious::Jobs::ClearExpiredItemsJob.new
+
+Invidious::Jobs.register Invidious::Jobs::InstanceListRefreshJob.new
 
 Invidious::Jobs.start_all
 
@@ -203,30 +208,35 @@ error 404 do |env|
   Invidious::Routes::ErrorRoutes.error_404(env)
 end
 
-error 500 do |env, ex|
-  error_template(500, ex)
-end
-
-static_headers do |response|
-  response.headers.add("Cache-Control", "max-age=2629800")
+error 500 do |env, exception|
+  error_template(500, exception)
 end
 
 # Init Kemal
 
-public_folder "assets"
-
 Kemal.config.powered_by_header = false
 add_handler FilteredCompressHandler.new
 add_handler APIHandler.new
+add_handler DisableAbusableAPIHandler.new
 add_handler AuthHandler.new
 add_handler DenyFrame.new
+
+{% if compare_versions(Crystal::VERSION, "1.17.0-dev") >= 0 %}
+  Kemal.config.serve_static = false
+  add_handler Invidious::HttpServer::StaticAssetsHandler.new("assets", directory_listing: false)
+{% else %}
+  public_folder "assets"
+
+  static_headers do |env|
+    env.response.headers.add("Cache-Control", "max-age=2629800")
+  end
+{% end %}
+
 add_context_storage_type(Array(String))
 add_context_storage_type(Preferences)
 add_context_storage_type(Invidious::User)
 
 Kemal.config.logger = LOGGER
-Kemal.config.host_binding = Kemal.config.host_binding != "0.0.0.0" ? Kemal.config.host_binding : CONFIG.host_binding
-Kemal.config.port = Kemal.config.port != 3000 ? Kemal.config.port : CONFIG.port
 Kemal.config.app_name = "Invidious"
 
 # Use in kemal's production mode.
@@ -235,4 +245,18 @@ Kemal.config.app_name = "Invidious"
   Kemal.config.env = "production" if !ENV.has_key?("KEMAL_ENV")
 {% end %}
 
-Kemal.run
+Kemal.run do |config|
+  config.server.not_nil!.max_request_line_size = 16384
+
+  if socket_binding = CONFIG.socket_binding
+    File.delete?(socket_binding.path)
+    # Create a socket and set its desired permissions
+    server = UNIXServer.new(socket_binding.path)
+    perms = socket_binding.permissions.to_i(base: 8)
+    File.chmod(socket_binding.path, perms)
+    config.server.not_nil!.bind server
+  else
+    Kemal.config.host_binding = Kemal.config.host_binding != "0.0.0.0" ? Kemal.config.host_binding : CONFIG.host_binding
+    Kemal.config.port = Kemal.config.port != 3000 ? Kemal.config.port : CONFIG.port
+  end
+end

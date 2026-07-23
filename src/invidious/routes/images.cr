@@ -11,29 +11,9 @@ module Invidious::Routes::Images
       end
     end
 
-    # We're encapsulating this into a proc in order to easily reuse this
-    # portion of the code for each request block below.
-    request_proc = ->(response : HTTP::Client::Response) {
-      env.response.status_code = response.status_code
-      response.headers.each do |key, value|
-        if !RESPONSE_HEADERS_BLACKLIST.includes?(key.downcase)
-          env.response.headers[key] = value
-        end
-      end
-
-      env.response.headers["Access-Control-Allow-Origin"] = "*"
-
-      if response.status_code >= 300
-        env.response.headers.delete("Transfer-Encoding")
-        return
-      end
-
-      proxy_file(response, env)
-    }
-
     begin
-      HTTP::Client.get("https://yt3.ggpht.com#{url}") do |resp|
-        return request_proc.call(resp)
+      GGPHT_POOL.client &.get(url, headers) do |resp|
+        return self.proxy_image(env, resp)
       end
     rescue ex
     end
@@ -61,34 +41,17 @@ module Invidious::Routes::Images
       end
     end
 
-    request_proc = ->(response : HTTP::Client::Response) {
-      env.response.status_code = response.status_code
-      response.headers.each do |key, value|
-        if !RESPONSE_HEADERS_BLACKLIST.includes?(key.downcase)
-          env.response.headers[key] = value
-        end
-      end
-
-      env.response.headers["Connection"] = "close"
-      env.response.headers["Access-Control-Allow-Origin"] = "*"
-
-      if response.status_code >= 300
-        return env.response.headers.delete("Transfer-Encoding")
-      end
-
-      proxy_file(response, env)
-    }
-
     begin
-      HTTP::Client.get("https://#{authority}.ytimg.com#{url}") do |resp|
-        return request_proc.call(resp)
+      get_ytimg_pool(authority).client &.get(url, headers) do |resp|
+        env.response.headers["Connection"] = "close"
+        return self.proxy_image(env, resp)
       end
     rescue ex
     end
   end
 
   # ??? maybe also for storyboards?
-  def self.s_p_image(env)
+  def self.s_p_image(env, authority = "i9")
     id = env.params.url["id"]
     name = env.params.url["name"]
     url = env.request.resource
@@ -101,29 +64,22 @@ module Invidious::Routes::Images
       end
     end
 
-    request_proc = ->(response : HTTP::Client::Response) {
-      env.response.status_code = response.status_code
-      response.headers.each do |key, value|
-        if !RESPONSE_HEADERS_BLACKLIST.includes?(key.downcase)
-          env.response.headers[key] = value
-        end
-      end
-
-      env.response.headers["Access-Control-Allow-Origin"] = "*"
-
-      if response.status_code >= 300 && response.status_code != 404
-        return env.response.headers.delete("Transfer-Encoding")
-      end
-
-      proxy_file(response, env)
-    }
-
     begin
-      HTTP::Client.get("https://i9.ytimg.com#{url}") do |resp|
-        return request_proc.call(resp)
+      get_ytimg_pool(authority).client &.get(url, headers) do |resp|
+        return self.proxy_image(env, resp)
       end
     rescue ex
     end
+  end
+
+  # Both pl_c and tvfilm_banner use the same logic used in s_p_image(env)
+  # just with a different authority ("i").
+  def self.pl_c_image(env)
+    self.s_p_image(env, "i")
+  end
+
+  def self.tvfilm_banner_image(env)
+    self.s_p_image(env, "i")
   end
 
   def self.yts_image(env)
@@ -150,7 +106,7 @@ module Invidious::Routes::Images
           break
         end
 
-        proxy_file(response, env)
+        Helpers.proxy_file(response, env)
       end
     rescue ex
     end
@@ -165,8 +121,7 @@ module Invidious::Routes::Images
     if name == "maxres.jpg"
       build_thumbnails(id).each do |thumb|
         thumbnail_resource_path = "/vi/#{id}/#{thumb[:url]}.jpg"
-        # This can likely be optimized into a (small) pool sometime in the future.
-        if HTTP::Client.head("https://i.ytimg.com#{thumbnail_resource_path}").status_code == 200
+        if get_ytimg_pool("i").client &.head(thumbnail_resource_path, headers).status_code == 200
           name = thumb[:url] + ".jpg"
           break
         end
@@ -181,29 +136,28 @@ module Invidious::Routes::Images
       end
     end
 
-    request_proc = ->(response : HTTP::Client::Response) {
-      env.response.status_code = response.status_code
-      response.headers.each do |key, value|
-        if !RESPONSE_HEADERS_BLACKLIST.includes?(key.downcase)
-          env.response.headers[key] = value
-        end
-      end
-
-      env.response.headers["Access-Control-Allow-Origin"] = "*"
-
-      if response.status_code >= 300 && response.status_code != 404
-        return env.response.headers.delete("Transfer-Encoding")
-      end
-
-      proxy_file(response, env)
-    }
-
     begin
-      # This can likely be optimized into a (small) pool sometime in the future.
-      HTTP::Client.get("https://i.ytimg.com#{url}") do |resp|
-        return request_proc.call(resp)
+      get_ytimg_pool("i").client &.get(url, headers) do |resp|
+        return self.proxy_image(env, resp)
       end
     rescue ex
     end
+  end
+
+  private def self.proxy_image(env, response)
+    env.response.status_code = response.status_code
+    response.headers.each do |key, value|
+      if !RESPONSE_HEADERS_BLACKLIST.includes?(key.downcase)
+        env.response.headers[key] = value
+      end
+    end
+
+    env.response.headers["Access-Control-Allow-Origin"] = "*"
+
+    if response.status_code >= 300
+      return env.response.headers.delete("Transfer-Encoding")
+    end
+
+    return Helpers.proxy_file(response, env)
   end
 end

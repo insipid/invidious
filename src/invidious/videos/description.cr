@@ -21,8 +21,6 @@ private def copy_string(str : String::Builder, iter : Iterator, count : Int) : I
       str << cp.chr
     end
 
-    # A codepoint from the SMP counts twice
-    copied += 1 if cp > 0xFFFF
     copied += 1
   end
 
@@ -36,12 +34,14 @@ def parse_description(desc, video_id : String) : String?
   return "" if content.empty?
 
   commands = desc["commandRuns"]?.try &.as_a
-  return content if commands.nil?
+  if commands.nil?
+    # Slightly faster than HTML.escape, as we're only doing one pass on
+    # the string instead of five for the standard library
+    return String.build do |str|
+      copy_string(str, content.each_codepoint, content.size)
+    end
+  end
 
-  # Not everything is stored in UTF-8 on youtube's side. The SMP codepoints
-  # (0x10000 and above) are encoded as UTF-16 surrogate pairs, which are
-  # automatically decoded by the JSON parser. It means that we need to count
-  # copied byte in a special manner, preventing the use of regular string copy.
   iter = content.each_codepoint
 
   index = 0

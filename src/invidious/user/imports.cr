@@ -30,28 +30,24 @@ struct Invidious::User
       return subscriptions
     end
 
-    def parse_playlist_export_csv(user : User, raw_input : String)
+    # Parse a CSV Google Takeout - Youtube Playlist file
+    def parse_playlist_export_csv(user : User, playlist_name : String, raw_input : String)
       # Split the input into head and body content
-      raw_head, raw_body = raw_input.strip('\n').split("\n\n", limit: 2, remove_empty: true)
+      raw_head, raw_body = raw_input.split("\n", limit: 2, remove_empty: true)
 
       # Create the playlist from the head content
       csv_head = CSV.new(raw_head.strip('\n'), headers: true)
       csv_head.next
-      title = csv_head[4]
-      description = csv_head[5]
-      visibility = csv_head[6]
+      title = playlist_name
 
-      if visibility.compare("Public", case_insensitive: true) == 0
-        privacy = PlaylistPrivacy::Public
-      else
-        privacy = PlaylistPrivacy::Private
-      end
+      description = "This is the default description of an imported playlist. Feel Free to change it as you see fit."
+      privacy = PlaylistPrivacy::Private
 
       playlist = create_playlist(title, privacy, user)
       Invidious::Database::Playlists.update_description(playlist.id, description)
 
       # Add each video to the playlist from the body content
-      csv_body = CSV.new(raw_body.strip('\n'), headers: true)
+      csv_body = CSV.new(raw_body.strip('\n'), headers: false)
       csv_body.each do |row|
         video_id = row[0]
         if playlist
@@ -115,7 +111,7 @@ struct Invidious::User
         playlists.each do |item|
           title = item["title"]?.try &.as_s?.try &.delete("<>")
           description = item["description"]?.try &.as_s?.try &.delete("\r")
-          privacy = item["privacy"]?.try &.as_s?.try { |privacy| PlaylistPrivacy.parse? privacy }
+          privacy = item["privacy"]?.try &.as_s?.try { |raw_pl_privacy_state| PlaylistPrivacy.parse? raw_pl_privacy_state }
 
           next if !title
           next if !description
@@ -124,7 +120,7 @@ struct Invidious::User
           playlist = create_playlist(title, privacy, user)
           Invidious::Database::Playlists.update_description(playlist.id, description)
 
-          videos = item["videos"]?.try &.as_a?.try &.each_with_index do |video_id, idx|
+          item["videos"]?.try &.as_a?.try &.each_with_index do |video_id, idx|
             if idx > CONFIG.playlist_length_limit
               raise InfoException.new("Playlist cannot have more than #{CONFIG.playlist_length_limit} videos")
             end
@@ -161,7 +157,7 @@ struct Invidious::User
     #  Youtube
     # -------------------
 
-    private def is_opml?(mimetype : String, extension : String)
+    private def opml?(mimetype : String, extension : String)
       opml_mimetypes = [
         "application/xml",
         "text/xml",
@@ -179,10 +175,10 @@ struct Invidious::User
     def from_youtube(user : User, body : String, filename : String, type : String) : Bool
       extension = filename.split(".").last
 
-      if is_opml?(type, extension)
+      if opml?(type, extension)
         subscriptions = XML.parse(body)
         user.subscriptions += subscriptions.xpath_nodes(%q(//outline[@type="rss"])).map do |channel|
-          channel["xmlUrl"].match(/UC[a-zA-Z0-9_-]{22}/).not_nil![0]
+          channel["xmlUrl"].match!(/UC[a-zA-Z0-9_-]{22}/)[0]
         end
       elsif extension == "json" || type == "application/json"
         subscriptions = JSON.parse(body)
@@ -204,10 +200,12 @@ struct Invidious::User
     end
 
     def from_youtube_pl(user : User, body : String, filename : String, type : String) : Bool
-      extension = filename.split(".").last
+      filename_array = filename.split(".")
+      playlist_name = filename_array.first
+      extension = filename_array.last
 
       if extension == "csv" || type == "text/csv"
-        playlist = parse_playlist_export_csv(user, body)
+        playlist = parse_playlist_export_csv(user, playlist_name, body)
         if playlist
           return true
         else
@@ -290,42 +288,39 @@ struct Invidious::User
     end
 
     def from_newpipe(user : User, body : String) : Bool
-      io = IO::Memory.new(body)
+      Compress::Zip::File.open(IO::Memory.new(body), true) do |file|
+        entry = file.entries.find { |file_entry| file_entry.filename == "newpipe.db" }
+        return false if entry.nil?
+        entry.open do |file_io|
+          # Ensure max size of 4MB
+          io_sized = IO::Sized.new(file_io, 0x400000)
 
-      Compress::Zip::File.open(io) do |file|
-        file.entries.each do |entry|
-          entry.open do |file_io|
-            # Ensure max size of 4MB
-            io_sized = IO::Sized.new(file_io, 0x400000)
+          begin
+            temp = File.tempfile(".db") do |tempfile|
+              begin
+                File.write(tempfile.path, io_sized.gets_to_end)
+              rescue
+                return false
+              end
 
-            next if entry.filename != "newpipe.db"
+              DB.open("sqlite3://" + tempfile.path) do |db|
+                user.watched += db.query_all("SELECT url FROM streams", as: String)
+                  .map(&.lchop("https://www.youtube.com/watch?v="))
 
-            tempfile = File.tempfile(".db")
+                user.watched.uniq!
+                Invidious::Database::Users.update_watch_history(user)
 
-            begin
-              File.write(tempfile.path, io_sized.gets_to_end)
-            rescue
-              return false
+                user.subscriptions += db.query_all("SELECT url FROM subscriptions", as: String)
+                  .map(&.lchop("https://www.youtube.com/channel/"))
+
+                user.subscriptions.uniq!
+                user.subscriptions = get_batch_channels(user.subscriptions)
+
+                Invidious::Database::Users.update_subscriptions(user)
+              end
             end
-
-            db = DB.open("sqlite3://" + tempfile.path)
-
-            user.watched += db.query_all("SELECT url FROM streams", as: String)
-              .map(&.lchop("https://www.youtube.com/watch?v="))
-
-            user.watched.uniq!
-            Invidious::Database::Users.update_watch_history(user)
-
-            user.subscriptions += db.query_all("SELECT url FROM subscriptions", as: String)
-              .map(&.lchop("https://www.youtube.com/channel/"))
-
-            user.subscriptions.uniq!
-            user.subscriptions = get_batch_channels(user.subscriptions)
-
-            Invidious::Database::Users.update_subscriptions(user)
-
-            db.close
-            tempfile.delete
+          ensure
+            temp.delete if !temp.nil?
           end
         end
       end

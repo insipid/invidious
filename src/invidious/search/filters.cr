@@ -57,8 +57,6 @@ module Invidious::Search
     # Values correspond to { "1:varint": <X> }
     enum Sort
       Relevance = 0
-      Rating    = 1
-      Date      = 2
       Views     = 3
     end
 
@@ -75,7 +73,7 @@ module Invidious::Search
       @type : Type = Type::All,
       @duration : Duration = Duration::None,
       @features : Features = Features::None,
-      @sort : Sort = Sort::Relevance
+      @sort : Sort = Sort::Relevance,
     )
     end
 

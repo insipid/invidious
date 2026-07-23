@@ -210,25 +210,30 @@ module Invidious::Routes::Playlists
     title = env.params.body["title"]?.try &.delete("<>") || ""
     privacy = PlaylistPrivacy.parse(env.params.body["privacy"]? || "Public")
     description = env.params.body["description"]?.try &.delete("\r") || ""
+    item_orders = env.params.body.fetch_all("order")
+    item_indexes = env.params.body.fetch_all("index")
+
+    index = item_orders.zip(item_indexes).sort { |x, y| x[0] <=> y[0] }.map { |x| x[1].to_i64 }
 
     if title != playlist.title ||
        privacy != playlist.privacy ||
-       description != playlist.description
+       description != playlist.description ||
+       index != playlist.index
       updated = Time.utc
     else
       updated = playlist.updated
     end
 
-    Invidious::Database::Playlists.update(plid, title, privacy, description, updated)
+    Invidious::Database::Playlists.update(plid, title, privacy, description, index, updated)
 
     env.redirect "/playlist?list=#{plid}"
   end
 
   def self.add_playlist_items_page(env)
-    prefs = env.get("preferences").as(Preferences)
-    locale = prefs.locale
+    preferences = env.get("preferences").as(Preferences)
+    locale = preferences.locale
 
-    region = env.params.query["region"]? || prefs.region
+    region = env.params.query["region"]? || preferences.region
 
     user = env.get? "user"
     sid = env.get? "sid"
@@ -304,23 +309,6 @@ module Invidious::Routes::Playlists
       end
     end
 
-    if env.params.query["action_create_playlist"]?
-      action = "action_create_playlist"
-    elsif env.params.query["action_delete_playlist"]?
-      action = "action_delete_playlist"
-    elsif env.params.query["action_edit_playlist"]?
-      action = "action_edit_playlist"
-    elsif env.params.query["action_add_video"]?
-      action = "action_add_video"
-      video_id = env.params.query["video_id"]
-    elsif env.params.query["action_remove_video"]?
-      action = "action_remove_video"
-    elsif env.params.query["action_move_video_before"]?
-      action = "action_move_video_before"
-    else
-      return env.redirect referer
-    end
-
     begin
       playlist_id = env.params.query["playlist_id"]
       playlist = get_playlist(playlist_id).as(InvidiousPlaylist)
@@ -335,12 +323,8 @@ module Invidious::Routes::Playlists
       end
     end
 
-    email = user.email
-
-    case action
-    when "action_edit_playlist"
-      # TODO: Playlist stub
-    when "action_add_video"
+    case action = env.params.query["action"]?
+    when "add_video"
       if playlist.index.size >= CONFIG.playlist_length_limit
         if redirect
           return error_template(400, "Playlist cannot have more than #{CONFIG.playlist_length_limit} videos")
@@ -377,12 +361,18 @@ module Invidious::Routes::Playlists
 
       Invidious::Database::PlaylistVideos.insert(playlist_video)
       Invidious::Database::Playlists.update_video_added(playlist_id, playlist_video.index)
-    when "action_remove_video"
-      index = env.params.query["set_video_id"]
-      Invidious::Database::PlaylistVideos.delete(index)
+    when "remove_video"
+      index = env.params.query["set_video_id"].to_i64?
+      if index.nil? || !playlist.index.includes? index
+        return error_json(404, "Playlist does not contain index")
+      end
+
+      Invidious::Database::PlaylistVideos.delete(index, playlist_id)
       Invidious::Database::Playlists.update_video_removed(playlist_id, index)
-    when "action_move_video_before"
+    when "move_video_before"
       # TODO: Playlist stub
+    when nil
+      return error_json(400, "Missing action")
     else
       return error_json(400, "Unsupported action #{action}")
     end

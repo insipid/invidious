@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS public.playlists
     id text primary key,
     author text,
     description text,
+    thumbnail_url text,
     video_count integer,
     created timestamptz,
     updated timestamptz,

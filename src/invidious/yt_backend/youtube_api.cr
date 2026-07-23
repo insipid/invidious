@@ -6,20 +6,20 @@ module YoutubeAPI
   extend self
 
   # For Android versions, see https://en.wikipedia.org/wiki/Android_version_history
-  private ANDROID_APP_VERSION = "19.14.42"
-  private ANDROID_USER_AGENT  = "com.google.android.youtube/19.14.42 (Linux; U; Android 12; US) gzip"
-  private ANDROID_SDK_VERSION = 31_i64
-  private ANDROID_VERSION     = "12"
+  private ANDROID_APP_VERSION = "21.29.366"
+  private ANDROID_VERSION     = "16"
+  private ANDROID_USER_AGENT  = "com.google.android.youtube/#{ANDROID_APP_VERSION} (Linux; U; Android #{ANDROID_VERSION}; en_US; SM-S908E Build/TP1A.220624.014) gzip"
+  private ANDROID_SDK_VERSION = 33_i64
 
   private ANDROID_TS_APP_VERSION = "1.9"
-  private ANDROID_TS_USER_AGENT  = "com.google.android.youtube/1.9 (Linux; U; Android 12; US) gzip"
+  private ANDROID_TS_USER_AGENT  = "com.google.android.youtube/1.9 (Linux; U; Android 16; US) gzip"
 
   # For Apple device names, see https://gist.github.com/adamawolf/3048717
   # For iOS versions, see https://en.wikipedia.org/wiki/IOS_version_history#Releases,
   # then go to the dedicated article of the major version you want.
-  private IOS_APP_VERSION = "19.16.3"
-  private IOS_USER_AGENT  = "com.google.ios.youtube/19.16.3 (iPhone14,5; U; CPU iOS 17_4 like Mac OS X;)"
-  private IOS_VERSION     = "17.4.0.21E219" # Major.Minor.Patch.Build
+  private IOS_APP_VERSION = "20.11.6"
+  private IOS_USER_AGENT  = "com.google.ios.youtube/#{IOS_APP_VERSION} (iPhone14,5; U; CPU iOS 18_5 like Mac OS X;)"
+  private IOS_VERSION     = "18.5.0.22F76" # Major.Minor.Patch.Build
 
   private WINDOWS_VERSION = "10.0"
 
@@ -29,6 +29,7 @@ module YoutubeAPI
     WebEmbeddedPlayer
     WebMobile
     WebScreenEmbed
+    WebCreator
 
     Android
     AndroidEmbeddedPlayer
@@ -41,6 +42,7 @@ module YoutubeAPI
 
     TvHtml5
     TvHtml5ScreenEmbed
+    TvSimply
   end
 
   # List of hard-coded values used by the different clients
@@ -48,7 +50,8 @@ module YoutubeAPI
     ClientType::Web => {
       name:       "WEB",
       name_proto: "1",
-      version:    "2.20240304.00.00",
+
+      version:    "2.20260722.01.00",
       screen:     "WATCH_FULL_SCREEN",
       os_name:    "Windows",
       os_version: WINDOWS_VERSION,
@@ -57,7 +60,7 @@ module YoutubeAPI
     ClientType::WebEmbeddedPlayer => {
       name:       "WEB_EMBEDDED_PLAYER",
       name_proto: "56",
-      version:    "1.20240303.00.00",
+      version:    "2.20260722.01.00",
       screen:     "EMBED",
       os_name:    "Windows",
       os_version: WINDOWS_VERSION,
@@ -66,7 +69,7 @@ module YoutubeAPI
     ClientType::WebMobile => {
       name:       "MWEB",
       name_proto: "2",
-      version:    "2.20240304.08.00",
+      version:    "2.20260722.01.00",
       os_name:    "Android",
       os_version: ANDROID_VERSION,
       platform:   "MOBILE",
@@ -74,8 +77,18 @@ module YoutubeAPI
     ClientType::WebScreenEmbed => {
       name:       "WEB",
       name_proto: "1",
-      version:    "2.20240304.00.00",
+
+      version:    "2.20260722.01.00",
+
       screen:     "EMBED",
+      os_name:    "Windows",
+      os_version: WINDOWS_VERSION,
+      platform:   "DESKTOP",
+    },
+    ClientType::WebCreator => {
+      name:       "WEB_CREATOR",
+      name_proto: "62",
+      version:    "2.20260722.01.00",
       os_name:    "Windows",
       os_version: WINDOWS_VERSION,
       platform:   "DESKTOP",
@@ -147,8 +160,8 @@ module YoutubeAPI
     ClientType::IOSMusic => {
       name:         "IOS_MUSIC",
       name_proto:   "26",
-      version:      "6.42",
-      user_agent:   "com.google.ios.youtubemusic/6.42 (iPhone14,5; U; CPU iOS 17_4 like Mac OS X;)",
+      version:      "7.14",
+      user_agent:   "com.google.ios.youtubemusic/7.14 (iPhone14,5; U; CPU iOS 17_6 like Mac OS X;)",
       device_make:  "Apple",
       device_model: "iPhone14,5",
       os_name:      "iPhone",
@@ -161,13 +174,18 @@ module YoutubeAPI
     ClientType::TvHtml5 => {
       name:       "TVHTML5",
       name_proto: "7",
-      version:    "7.20240304.10.00",
+      version:    "2.20260722.01.00",
     },
     ClientType::TvHtml5ScreenEmbed => {
       name:       "TVHTML5_SIMPLY_EMBEDDED_PLAYER",
       name_proto: "85",
       version:    "2.0",
       screen:     "EMBED",
+    },
+    ClientType::TvSimply => {
+      name:       "TVHTML5_SIMPLY",
+      name_proto: "74",
+      version:    "1.0",
     },
   }
 
@@ -184,10 +202,6 @@ module YoutubeAPI
   # conf_1 = ClientConfig.new(region: "NO")
   # YoutubeAPI::search("Kollektivet", params: "", client_config: conf_1)
   #
-  # # Use the Android client to request video streams URLs
-  # conf_2 = ClientConfig.new(client_type: ClientType::Android)
-  # YoutubeAPI::player(video_id: "dQw4w9WgXcQ", client_config: conf_2)
-  #
   #
   struct ClientConfig
     # Type of client to emulate.
@@ -202,7 +216,7 @@ module YoutubeAPI
     def initialize(
       *,
       @client_type = ClientType::Web,
-      @region = "US"
+      @region = "US",
     )
     end
 
@@ -272,7 +286,7 @@ module YoutubeAPI
   # Return, as a Hash, the "context" data required to request the
   # youtube API endpoints.
   #
-  private def make_context(client_config : ClientConfig | Nil) : Hash
+  private def make_context(client_config : ClientConfig | Nil, video_id = "dQw4w9WgXcQ") : Hash
     # Use the default client config if nil is passed
     client_config ||= DEFAULT_CLIENT_CONFIG
 
@@ -292,7 +306,7 @@ module YoutubeAPI
 
     if client_config.screen == "EMBED"
       client_context["thirdParty"] = {
-        "embedUrl" => "https://www.youtube.com/embed/dQw4w9WgXcQ",
+        "embedUrl" => "https://www.youtube.com/embed/#{video_id}",
       } of String => String | Int64
     end
 
@@ -357,7 +371,7 @@ module YoutubeAPI
     browse_id : String,
     *, # Force the following parameters to be passed by name
     params : String,
-    client_config : ClientConfig | Nil = nil
+    client_config : ClientConfig | Nil = nil,
   )
     # JSON Request data, required by the API
     data = {
@@ -436,45 +450,24 @@ module YoutubeAPI
   end
 
   ####################################################################
-  # player(video_id, params, client_config?)
+  # player(video_id)
   #
-  # Requests the youtubei/v1/player endpoint with the required headers
-  # and POST data in order to get a JSON reply.
+  # Requests the youtubei/v1/player Invidious Companion endpoint with
+  # the requested video ID.
   #
-  # The requested data is a video ID (`v=` parameter), with some
-  # additional parameters, formatted as a base64 string.
+  # The requested data is a video ID (`v=` parameter).
   #
-  # An optional ClientConfig parameter can be passed, too (see
-  # `struct ClientConfig` above for more details).
-  #
-  def player(
-    video_id : String,
-    *, # Force the following parameters to be passed by name
-    params : String,
-    client_config : ClientConfig | Nil = nil
-  )
-    # JSON Request data, required by the API
+  def player(video_id : String)
+    # JSON Request data, required by Invidious Companion
     data = {
-      "contentCheckOk" => true,
-      "videoId"        => video_id,
-      "context"        => self.make_context(client_config),
-      "racyCheckOk"    => true,
-      "user"           => {
-        "lockedSafetyMode" => false,
-      },
-      "playbackContext" => {
-        "contentPlaybackContext" => {
-          "html5Preference": "HTML5_PREF_WANTS",
-        },
-      },
+      "videoId" => video_id,
     }
 
-    # Append the additional parameters if those were provided
-    if params != ""
-      data["params"] = params
+    if CONFIG.invidious_companion.present?
+      return self._post_invidious_companion("/youtubei/v1/player", data)
+    else
+      return nil
     end
-
-    return self._post_json("/youtubei/v1/player", data, client_config)
   end
 
   ####################################################################
@@ -490,7 +483,7 @@ module YoutubeAPI
   #
   # ```
   # # Valid channel "brand URL" gives the related UCID and browse ID
-  # channel_a = YoutubeAPI.resolve_url("https://youtube.com/c/google")
+  # channel_a = YoutubeAPI.resolve_url("https://www.youtube.com/c/google")
   # channel_a # => {
   #   "endpoint": {
   #     "browseEndpoint": {
@@ -502,7 +495,7 @@ module YoutubeAPI
   # }
   #
   # # Invalid URL returns throws an InfoException
-  # channel_b = YoutubeAPI.resolve_url("https://youtube.com/c/invalid")
+  # channel_b = YoutubeAPI.resolve_url("https://www.youtube.com/c/invalid")
   # ```
   #
   def resolve_url(url : String, client_config : ClientConfig | Nil = nil)
@@ -531,7 +524,7 @@ module YoutubeAPI
   def search(
     search_query : String,
     params : String,
-    client_config : ClientConfig | Nil = nil
+    client_config : ClientConfig | Nil = nil,
   )
     # JSON Request data, required by the API
     data = {
@@ -557,7 +550,7 @@ module YoutubeAPI
 
   def get_transcript(
     params : String,
-    client_config : ClientConfig | Nil = nil
+    client_config : ClientConfig | Nil = nil,
   ) : Hash(String, JSON::Any)
     data = {
       "context" => self.make_context(client_config),
@@ -579,7 +572,7 @@ module YoutubeAPI
   def _post_json(
     endpoint : String,
     data : Hash,
-    client_config : ClientConfig | Nil
+    client_config : ClientConfig | Nil,
   ) : Hash(String, JSON::Any)
     # Use the default client config if nil is passed
     client_config ||= DEFAULT_CLIENT_CONFIG
@@ -607,6 +600,11 @@ module YoutubeAPI
     # Send the POST request
     body = YT_POOL.client() do |client|
       client.post(url, headers: headers, body: data.to_json) do |response|
+        if response.status_code != 200
+          raise InfoException.new("Error: non 200 status code. Youtube API returned \
+            status code #{response.status_code}. See <a href=\"https://docs.invidious.io/youtube-errors-explained/\"> \
+            https://docs.invidious.io/youtube-errors-explained/</a> for troubleshooting.")
+        end
         self._decompress(response.body_io, response.headers["Content-Encoding"]?)
       end
     end
@@ -629,6 +627,47 @@ module YoutubeAPI
     end
 
     return initial_data
+  end
+
+  ####################################################################
+  # _post_invidious_companion(endpoint, data)
+  #
+  # Internal function that does the actual request to Invidious companion
+  # and handles errors.
+  #
+  # The requested data is an endpoint (URL without the domain part)
+  # and the data as a Hash object.
+  #
+  def _post_invidious_companion(
+    endpoint : String,
+    data : Hash,
+  ) : Hash(String, JSON::Any)
+    headers = HTTP::Headers{
+      "Content-Type"  => "application/json; charset=UTF-8",
+      "Authorization" => "Bearer #{CONFIG.invidious_companion_key}",
+    }
+
+    # Logging
+    LOGGER.debug("Invidious companion: Using endpoint: \"#{endpoint}\"")
+    LOGGER.trace("Invidious companion: POST data: #{data}")
+
+    # Send the POST request
+
+    begin
+      response_body = Hash(String, JSON::Any).new
+
+      COMPANION_POOL.client do |wrapper|
+        companion_base_url = wrapper.companion.private_url.path
+
+        wrapper.client.post("#{companion_base_url}#{endpoint}", headers: headers, body: data.to_json) do |response|
+          response_body = JSON.parse(response.body_io).as_h
+        end
+      end
+
+      return response_body
+    rescue ex
+      raise InfoException.new("Error while communicating with Invidious companion: " + (ex.message || "no extra info found"))
+    end
   end
 
   ####################################################################

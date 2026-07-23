@@ -7,7 +7,7 @@
   youtube_url = "https://www.youtube.com#{relative_url}"
   redirect_url = Invidious::Frontend::Misc.redirect_url(env)
 
-  selected_tab = Invidious::Frontend::ChannelPage::TabsAvailable::Community
+  selected_tab = Invidious::Frontend::ChannelPage::TabsAvailable::Posts
 -%>
 
 <% content_for "header" do %>
@@ -35,10 +35,10 @@
 <%=
 {
     "ucid" => ucid,
-    "youtube_comments_text" => HTML.escape(translate(locale, "View YouTube comments")),
-    "comments_text" => HTML.escape(translate(locale, "View `x` comments", "{commentCount}")),
-    "hide_replies_text" => HTML.escape(translate(locale, "Hide replies")),
-    "show_replies_text" => HTML.escape(translate(locale, "Show replies")),
+    "youtube_comments_text" => HTML.escape(I18n.translate(locale, "View YouTube comments")),
+    "comments_text" => HTML.escape(I18n.translate(locale, "View `x` comments", "{commentCount}")),
+    "hide_replies_text" => HTML.escape(I18n.translate(locale, "Hide replies")),
+    "show_replies_text" => HTML.escape(I18n.translate(locale, "Show replies")),
     "preferences" => env.get("preferences").as(Preferences)
 }.to_pretty_json
 %>

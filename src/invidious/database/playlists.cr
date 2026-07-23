@@ -36,14 +36,14 @@ module Invidious::Database::Playlists
   #  Update
   # -------------------
 
-  def update(id : String, title : String, privacy, description, updated)
+  def update(id : String, title : String, privacy, description, index, updated)
     request = <<-SQL
       UPDATE playlists
-      SET title = $1, privacy = $2, description = $3, updated = $4
-      WHERE id = $5
+      SET title = $1, privacy = $2, description = $3, index = $4, updated = $5, video_count = cardinality(index)
+      WHERE id = $6
     SQL
 
-    PG_DB.exec(request, title, privacy, description, updated, id)
+    PG_DB.exec(request, title, privacy, description, index, updated, id)
   end
 
   def update_description(id : String, description)
@@ -91,7 +91,7 @@ module Invidious::Database::Playlists
   end
 
   # -------------------
-  #  Salect
+  #  Select
   # -------------------
 
   def select(*, id : String) : InvidiousPlaylist?
@@ -113,7 +113,7 @@ module Invidious::Database::Playlists
   end
 
   # -------------------
-  #  Salect (filtered)
+  #  Select (filtered)
   # -------------------
 
   def select_like_iv(email : String) : Array(InvidiousPlaylist)
@@ -140,6 +140,7 @@ module Invidious::Database::Playlists
     request = <<-SQL
       SELECT id,title FROM playlists
       WHERE author = $1 AND id LIKE 'IV%'
+      ORDER BY title
     SQL
 
     PG_DB.query_all(request, email, as: {String, String})
@@ -193,13 +194,13 @@ module Invidious::Database::PlaylistVideos
     PG_DB.exec(request, args: video_array)
   end
 
-  def delete(index)
+  def delete(index, plid : String)
     request = <<-SQL
       DELETE FROM playlist_videos *
-      WHERE index = $1
+      WHERE index = $1 AND plid = $2
     SQL
 
-    PG_DB.exec(request, index)
+    PG_DB.exec(request, index, plid)
   end
 
   def delete_by_playlist(plid : String)
@@ -212,7 +213,7 @@ module Invidious::Database::PlaylistVideos
   end
 
   # -------------------
-  #  Salect
+  #  Select
   # -------------------
 
   def select(plid : String, index : VideoIndex, offset, limit = 100) : Array(PlaylistVideo)

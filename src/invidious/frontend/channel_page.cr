@@ -7,8 +7,9 @@ module Invidious::Frontend::ChannelPage
     Streams
     Podcasts
     Releases
+    Courses
     Playlists
-    Community
+    Posts
     Channels
   end
 
@@ -27,14 +28,14 @@ module Invidious::Frontend::ChannelPage
 
           if tab == selected_tab
             str << "\t<b>"
-            str << translate(locale, "channel_tab_#{tab_name}_label")
+            str << I18n.translate(locale, "channel_tab_#{tab_name}_label")
             str << "</b>\n"
           else
             # Video tab doesn't have the last path component
             url = tab.videos? ? base_url : "#{base_url}/#{tab_name}"
 
             str << %(\t<a href=") << url << %(">)
-            str << translate(locale, "channel_tab_#{tab_name}_label")
+            str << I18n.translate(locale, "channel_tab_#{tab_name}_label")
             str << "</a>\n"
           end
 

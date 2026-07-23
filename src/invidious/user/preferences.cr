@@ -4,6 +4,7 @@ struct Preferences
 
   property annotations : Bool = CONFIG.default_user_preferences.annotations
   property annotations_subscribed : Bool = CONFIG.default_user_preferences.annotations_subscribed
+  property preload : Bool = CONFIG.default_user_preferences.preload
   property autoplay : Bool = CONFIG.default_user_preferences.autoplay
   property automatic_instance_redirect : Bool = CONFIG.default_user_preferences.automatic_instance_redirect
 
@@ -55,6 +56,8 @@ struct Preferences
   property extend_desc : Bool = CONFIG.default_user_preferences.extend_desc
   property volume : Int32 = CONFIG.default_user_preferences.volume
   property save_player_pos : Bool = CONFIG.default_user_preferences.save_player_pos
+  property default_playlist : String? = nil
+  property search_privacy : Bool = CONFIG.default_user_preferences.search_privacy
 
   module BoolToString
     def self.to_json(value : String, json : JSON::Builder)

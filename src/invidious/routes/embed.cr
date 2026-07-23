@@ -10,15 +10,17 @@ module Invidious::Routes::Embed
         videos = get_playlist_videos(playlist, offset: offset)
         if videos.empty?
           url = "/playlist?list=#{plid}"
-          raise NotFoundException.new(translate(locale, "error_video_not_in_playlist", url))
+          raise NotFoundException.new(I18n.translate(locale, "error_video_not_in_playlist", url))
         end
+
+        first_playlist_video = videos[0].as(PlaylistVideo)
       rescue ex : NotFoundException
         return error_template(404, ex)
       rescue ex
         return error_template(500, ex)
       end
 
-      url = "/embed/#{videos[0].id}?#{env.params.query}"
+      url = "/embed/#{first_playlist_video.id}?#{env.params.query}"
 
       if env.params.query.size > 0
         url += "?#{env.params.query}"
@@ -31,7 +33,8 @@ module Invidious::Routes::Embed
   end
 
   def self.show(env)
-    locale = env.get("preferences").as(Preferences).locale
+    preferences = env.get("preferences").as(Preferences)
+    locale = preferences.locale
     id = env.params.url["id"]
 
     plid = env.params.query["list"]?.try &.gsub(/[^a-zA-Z0-9_-]/, "")
@@ -42,8 +45,6 @@ module Invidious::Routes::Embed
       video_series = md[0].split(",")
       env.params.query.delete("playlist")
     end
-
-    preferences = env.get("preferences").as(Preferences)
 
     if id.includes?("%20") || id.includes?("+") || env.params.query.to_s.includes?("%20") || env.params.query.to_s.includes?("+")
       id = env.params.url["id"].gsub("%20", "").delete("+")
@@ -70,15 +71,17 @@ module Invidious::Routes::Embed
           videos = get_playlist_videos(playlist, offset: offset)
           if videos.empty?
             url = "/playlist?list=#{plid}"
-            raise NotFoundException.new(translate(locale, "error_video_not_in_playlist", url))
+            raise NotFoundException.new(I18n.translate(locale, "error_video_not_in_playlist", url))
           end
+
+          first_playlist_video = videos[0].as(PlaylistVideo)
         rescue ex : NotFoundException
           return error_template(404, ex)
         rescue ex
           return error_template(500, ex)
         end
 
-        url = "/embed/#{videos[0].id}"
+        url = "/embed/#{first_playlist_video.id}"
       elsif video_series
         url = "/embed/#{video_series.shift}"
         env.params.query["playlist"] = video_series.join(",")
@@ -119,7 +122,7 @@ module Invidious::Routes::Embed
     else nil # Continue
     end
 
-    params = process_video_params(env.params.query, preferences)
+    params = Invidious::Videos.process_video_params(env.params.query, preferences)
 
     user = env.get?("user").try &.as(User)
     if user
@@ -157,9 +160,11 @@ module Invidious::Routes::Embed
     adaptive_fmts = video.adaptive_fmts
 
     if params.local
-      fmt_stream.each { |fmt| fmt["url"] = JSON::Any.new(URI.parse(fmt["url"].as_s).request_target) }
-      adaptive_fmts.each { |fmt| fmt["url"] = JSON::Any.new(URI.parse(fmt["url"].as_s).request_target) }
+      fmt_stream.each { |fmt| fmt["url"] = JSON::Any.new(HttpServer::Utils.proxy_video_url(fmt["url"].as_s)) }
     end
+
+    # Always proxy DASH streams, otherwise youtube CORS headers will prevent playback
+    adaptive_fmts.each { |fmt| fmt["url"] = JSON::Any.new(HttpServer::Utils.proxy_video_url(fmt["url"].as_s)) }
 
     video_streams = video.video_streams
     audio_streams = video.audio_streams
@@ -199,6 +204,10 @@ module Invidious::Routes::Embed
       end
 
       return env.redirect url
+    end
+
+    if CONFIG.invidious_companion.present?
+      invidious_companion = CONFIG.invidious_companion.sample
     end
 
     rendered "embed"

@@ -27,6 +27,7 @@ class Kemal::RouteHandler
   # Processes the route if it's a match. Otherwise renders 404.
   private def process_request(context)
     raise Kemal::Exceptions::RouteNotFound.new(context) unless context.route_found?
+    return if context.response.closed?
     content = context.route.handler.call(context)
 
     if !Kemal.config.error_handlers.empty? && Kemal.config.error_handlers.has_key?(context.response.status_code) && exclude_match?(context)
@@ -60,28 +61,13 @@ class Kemal::ExceptionHandler
   end
 end
 
-class FilteredCompressHandler < Kemal::Handler
+class FilteredCompressHandler < HTTP::CompressHandler
   exclude ["/videoplayback", "/videoplayback/*", "/vi/*", "/sb/*", "/ggpht/*", "/api/v1/auth/notifications"]
   exclude ["/api/v1/auth/notifications", "/data_control"], "POST"
 
-  def call(env)
-    return call_next env if exclude_match? env
-
-    {% if flag?(:without_zlib) %}
-      call_next env
-    {% else %}
-      request_headers = env.request.headers
-
-      if request_headers.includes_word?("Accept-Encoding", "gzip")
-        env.response.headers["Content-Encoding"] = "gzip"
-        env.response.output = Compress::Gzip::Writer.new(env.response.output, sync_close: true)
-      elsif request_headers.includes_word?("Accept-Encoding", "deflate")
-        env.response.headers["Content-Encoding"] = "deflate"
-        env.response.output = Compress::Deflate::Writer.new(env.response.output, sync_close: true)
-      end
-
-      call_next env
-    {% end %}
+  def call(context)
+    return call_next context if exclude_match? context
+    super
   end
 end
 
@@ -97,7 +83,7 @@ class AuthHandler < Kemal::Handler
       if token = env.request.headers["Authorization"]?
         token = JSON.parse(URI.decode_www_form(token.lchop("Bearer ")))
         session = URI.decode_www_form(token["session"].as_s)
-        scopes, expire, signature = validate_request(token, session, env.request, HMAC_KEY, nil)
+        scopes, _, _ = validate_request(token, session, env.request, HMAC_KEY, nil)
 
         if email = Invidious::Database::SessionIDs.select_email(session)
           user = Invidious::Database::Users.select!(email: email)
@@ -144,6 +130,26 @@ class APIHandler < Kemal::Handler
   def call(env)
     env.response.headers["Access-Control-Allow-Origin"] = "*" if only_match?(env)
     call_next env
+  end
+end
+
+class DisableAbusableAPIHandler < Kemal::Handler
+  {% for method in %w(GET HEAD) %}
+    # This endpoints make a video request to Invidious companion.
+    {% for endpoint in %w(videos clips transcripts) %}
+      only ["/api/v1/{{ endpoint.id }}/:id"], {{ method }}
+    {% end %}
+  {% end %}
+
+  def call(env)
+    return call_next env unless only_match?(env) && CONFIG.disable_abusable_api
+
+    env.response.content_type = "application/json"
+    env.response.status_code = 403
+    message = {"error" => "This API endpoint has been disabled by the administrator."}.to_json
+    env.response.print message
+    env.response.close
+    return
   end
 end
 

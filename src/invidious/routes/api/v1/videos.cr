@@ -1,4 +1,9 @@
+require "html"
+
 module Invidious::Routes::API::V1::Videos
+  private INTERNET_ARCHIVE_URL = URI.parse("https://archive.org")
+  private CHARS_SAFE           = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
   def self.videos(env)
     locale = env.get("preferences").as(Preferences).locale
 
@@ -116,7 +121,7 @@ module Invidious::Routes::API::V1::Videos
         else
           caption_xml = XML.parse(caption_xml)
 
-          webvtt = WebVTT.build(settings_field) do |webvtt|
+          webvtt = WebVTT.build(settings_field) do |builder|
             caption_nodes = caption_xml.xpath_nodes("//transcript/text")
             caption_nodes.each_with_index do |node, i|
               start_time = node["start"].to_f.seconds
@@ -136,12 +141,16 @@ module Invidious::Routes::API::V1::Videos
                 text = "<v #{md["name"]}>#{md["text"]}</v>"
               end
 
-              webvtt.cue(start_time, end_time, text)
+              builder.cue(start_time, end_time, text)
             end
           end
         end
       else
-        webvtt = YT_POOL.client &.get("#{url}&fmt=vtt").body
+        uri = URI.parse(url)
+        query_params = uri.query_params
+        query_params["fmt"] = "vtt"
+        uri.query_params = query_params
+        webvtt = YT_POOL.client &.get(uri.request_target).body
 
         if webvtt.starts_with?("<?xml")
           webvtt = caption.timedtext_to_vtt(webvtt)
@@ -183,15 +192,14 @@ module Invidious::Routes::API::V1::Videos
       haltf env, 500
     end
 
-    storyboards = video.storyboards
-    width = env.params.query["width"]?
-    height = env.params.query["height"]?
+    width = env.params.query["width"]?.try &.to_i
+    height = env.params.query["height"]?.try &.to_i
 
     if !width && !height
       response = JSON.build do |json|
         json.object do
           json.field "storyboards" do
-            Invidious::JSONify::APIv1.storyboards(json, id, storyboards)
+            Invidious::JSONify::APIv1.storyboards(json, id, video.storyboards)
           end
         end
       end
@@ -201,35 +209,48 @@ module Invidious::Routes::API::V1::Videos
 
     env.response.content_type = "text/vtt"
 
-    storyboard = storyboards.select { |sb| width == "#{sb[:width]}" || height == "#{sb[:height]}" }
+    # Select a storyboard matching the user's provided width/height
+    storyboard = video.storyboards.select { |x| x.width == width || x.height == height }
+    haltf env, 404 if storyboard.empty?
 
-    if storyboard.empty?
-      haltf env, 404
-    else
-      storyboard = storyboard[0]
-    end
+    # Alias variable, to make the code below esaier to read
+    sb = storyboard[0]
 
-    WebVTT.build do |vtt|
-      start_time = 0.milliseconds
-      end_time = storyboard[:interval].milliseconds
+    # Some base URL segments that we'll use to craft the final URLs
+    work_url = sb.proxied_url.dup
+    template_path = sb.proxied_url.path
 
-      storyboard[:storyboard_count].times do |i|
-        url = storyboard[:url]
-        authority = /(i\d?).ytimg.com/.match(url).not_nil![1]?
-        url = url.gsub("$M", i).gsub(%r(https://i\d?.ytimg.com/sb/), "")
-        url = "#{HOST_URL}/sb/#{authority}/#{url}"
+    # Initialize cue timing variables
+    # NOTE: videojs-vtt-thumbnails gets lost when the cue times don't overlap
+    # (i.e: if cue[n] end time is 1:06:25.000, cue[n+1] start time should be 1:06:25.000)
+    time_delta = sb.interval.milliseconds
+    start_time = 0.milliseconds
+    end_time = time_delta
 
-        storyboard[:storyboard_height].times do |j|
-          storyboard[:storyboard_width].times do |k|
-            current_cue_url = "#{url}#xywh=#{storyboard[:width] * k},#{storyboard[:height] * j},#{storyboard[:width] - 2},#{storyboard[:height]}"
-            vtt.cue(start_time, end_time, current_cue_url)
+    # Build a VTT file for VideoJS-vtt plugin
+    vtt_file = WebVTT.build do |vtt|
+      sb.images_count.times do |i|
+        # Replace the variable component part of the path
+        work_url.path = template_path.sub("$M", i)
 
-            start_time += storyboard[:interval].milliseconds
-            end_time += storyboard[:interval].milliseconds
+        sb.rows.times do |j|
+          sb.columns.times do |k|
+            # The URL fragment represents the offset of the thumbnail inside the storyboard image
+            work_url.fragment = "xywh=#{sb.width * k},#{sb.height * j},#{sb.width - 2},#{sb.height}"
+
+            vtt.cue(start_time, end_time, work_url.to_s)
+
+            start_time += time_delta
+            end_time += time_delta
           end
         end
       end
     end
+
+    # videojs-vtt-thumbnails is not compliant to the VTT specification, it
+    # doesn't unescape the HTML entities, so we have to do it here:
+    # TODO: remove this when we migrate to VideoJS 8
+    return HTML.unescape(vtt_file)
   end
 
   def self.annotations(env)
@@ -250,7 +271,7 @@ module Invidious::Routes::API::V1::Videos
       if CONFIG.cache_annotations && (cached_annotation = Invidious::Database::Annotations.select(id))
         annotations = cached_annotation.annotations
       else
-        index = CHARS_SAFE.index(id[0]).not_nil!.to_s.rjust(2, '0')
+        index = CHARS_SAFE.index!(id[0]).to_s.rjust(2, '0')
 
         # IA doesn't handle leading hyphens,
         # so we use https://archive.org/details/youtubeannotations_64
@@ -261,7 +282,7 @@ module Invidious::Routes::API::V1::Videos
 
         file = URI.encode_www_form("#{id[0, 3]}/#{id}.xml")
 
-        location = make_client(ARCHIVE_URL, &.get("/download/youtubeannotations_#{index}/#{id[0, 2]}.tar/#{file}"))
+        location = make_client(INTERNET_ARCHIVE_URL, &.get("/download/youtubeannotations_#{index}/#{id[0, 2]}.tar/#{file}"))
 
         if !location.headers["Location"]?
           env.response.status_code = location.status_code
@@ -279,7 +300,7 @@ module Invidious::Routes::API::V1::Videos
 
         annotations = response.body
 
-        cache_annotation(id, annotations)
+        Helpers.cache_annotation(id, annotations)
       end
     else # "youtube"
       response = YT_POOL.client &.get("/annotations_invideo?video_id=#{id}")
@@ -389,7 +410,7 @@ module Invidious::Routes::API::V1::Videos
     clip_title = nil
 
     if params = response.dig?("endpoint", "watchEndpoint", "params").try &.as_s
-      start_time, end_time, clip_title = parse_clip_parameters(params)
+      start_time, end_time, clip_title = Invidious::Videos::Clip.parse_clip_parameters(params)
     end
 
     begin
@@ -410,5 +431,91 @@ module Invidious::Routes::API::V1::Videos
         end
       end
     end
+  end
+
+  # Fetches transcripts from YouTube
+  #
+  # Use the `lang` and `autogen` query parameter to select which transcript to fetch
+  # Request without any URL parameters to see all the available transcripts.
+  def self.transcripts(env)
+    env.response.content_type = "application/json"
+
+    id = env.params.url["id"]
+    lang = env.params.query["lang"]?
+    label = env.params.query["label"]?
+    auto_generated = env.params.query["autogen"]? ? true : false
+
+    # Return all available transcript options when none is given
+    if !label && !lang
+      begin
+        video = get_video(id)
+      rescue ex : NotFoundException
+        return error_json(404, ex)
+      rescue ex
+        return error_json(500, ex)
+      end
+
+      response = JSON.build do |json|
+        # The amount of transcripts available to fetch is the
+        # same as the amount of captions available.
+        available_transcripts = video.captions
+
+        json.object do
+          json.field "transcripts" do
+            json.array do
+              available_transcripts.each do |transcript|
+                json.object do
+                  json.field "label", transcript.name
+                  json.field "languageCode", transcript.language_code
+                  json.field "autoGenerated", transcript.auto_generated
+
+                  if transcript.auto_generated
+                    json.field "url", "/api/v1/transcripts/#{id}?lang=#{URI.encode_www_form(transcript.language_code)}&autogen"
+                  else
+                    json.field "url", "/api/v1/transcripts/#{id}?lang=#{URI.encode_www_form(transcript.language_code)}"
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+
+      return response
+    end
+
+    # If lang is not given then we attempt to fetch
+    # the transcript through the given label
+    if lang.nil?
+      begin
+        video = get_video(id)
+      rescue ex : NotFoundException
+        return error_json(404, ex)
+      rescue ex
+        return error_json(500, ex)
+      end
+
+      target_transcript = video.captions.select(&.name.== label)
+      if target_transcript.empty?
+        return error_json(404, NotFoundException.new("Requested transcript does not exist"))
+      else
+        target_transcript = target_transcript[0]
+        lang, auto_generated = target_transcript.language_code, target_transcript.auto_generated
+      end
+    end
+
+    params = Invidious::Videos::Transcript.generate_param(id, lang, auto_generated)
+
+    begin
+      transcript = Invidious::Videos::Transcript.from_raw(
+        YoutubeAPI.get_transcript(params), lang, auto_generated
+      )
+    rescue ex : NotFoundException
+      return error_json(404, ex)
+    rescue ex
+      return error_json(500, ex)
+    end
+
+    return transcript.to_json
   end
 end
