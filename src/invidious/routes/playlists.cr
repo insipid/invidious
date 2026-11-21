@@ -211,15 +211,32 @@ module Invidious::Routes::Playlists
     privacy = PlaylistPrivacy.parse(env.params.body["privacy"]? || "Public")
     description = env.params.body["description"]?.try &.delete("\r") || ""
 
+    # The edit page renders a position box beside each video, alongside a
+    # hidden field carrying that video's existing index. Pair them up, sort by
+    # the position the user asked for, and keep the resulting index order.
+    # Positions are compared numerically: sorting them as strings would put
+    # "10" before "2".
+    item_orders = env.params.body.fetch_all("order")
+    item_indexes = env.params.body.fetch_all("index")
+
+    if item_orders.empty? || item_orders.size != item_indexes.size
+      index = playlist.index
+    else
+      index = item_orders.zip(item_indexes)
+        .sort_by { |pair| pair[0].to_i64? || Int64::MAX }
+        .compact_map { |pair| pair[1].to_i64? }
+    end
+
     if title != playlist.title ||
        privacy != playlist.privacy ||
-       description != playlist.description
+       description != playlist.description ||
+       index != playlist.index
       updated = Time.utc
     else
       updated = playlist.updated
     end
 
-    Invidious::Database::Playlists.update(plid, title, privacy, description, updated)
+    Invidious::Database::Playlists.update(plid, title, privacy, description, index, updated)
 
     env.redirect "/playlist?list=#{plid}"
   end

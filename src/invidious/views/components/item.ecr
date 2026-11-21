@@ -179,6 +179,15 @@
                 <a href="<%= link_url %>"><p dir="auto"><%= HTML.escape(item.title) %></p></a>
             </div>
 
+            <%- if item.is_a?(PlaylistVideo) && env.request.path == "/edit_playlist" -%>
+                <div class="video-card-row">
+                    <input class="pure-input-1" type="text" inputmode="numeric" pattern="[0-9]*"
+                           name="order" aria-label="Position in playlist"
+                           value="<%= playlist_index + 1 %>">
+                    <input type="hidden" name="index" value="<%= item.index %>">
+                </div>
+            <%- end -%>
+
             <div class="video-card-row flexible">
                 <div class="flex-left">
                     <% if !item.ucid.to_s.empty? %>

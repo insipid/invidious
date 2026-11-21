@@ -36,7 +36,7 @@
 <% end %>
 
 <div class="pure-g">
-<% notifications.each do |item| %>
+<% notifications.each_with_index do |item, playlist_index| %>
     <%= rendered "components/item" %>
 <% end %>
 </div>
@@ -58,7 +58,7 @@
 
 
 <div class="pure-g">
-<% videos.each do |item| %>
+<% videos.each_with_index do |item, playlist_index| %>
     <%= rendered "components/item" %>
 <% end %>
 </div>

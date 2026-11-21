@@ -14,7 +14,7 @@
 </div>
 
 <div class="pure-g">
-<% mix.videos.each do |item| %>
+<% mix.videos.each_with_index do |item, playlist_index| %>
     <%= rendered "components/item" %>
 <% end %>
 </div>
