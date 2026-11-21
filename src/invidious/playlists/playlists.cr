@@ -171,6 +171,7 @@ struct InvidiousPlaylist
   property id : String
   property author : String
   property description : String = ""
+  property thumbnail_url : String?
   property video_count : Int32
   property created : Time
   property updated : Time
@@ -230,6 +231,12 @@ struct InvidiousPlaylist
   end
 
   def thumbnail
+    # A playlist saved from YouTube carries its own thumbnail, stored as a
+    # path relative to this instance. Fall back to the first video otherwise.
+    if (url = self.thumbnail_url) && !url.empty?
+      return url
+    end
+
     # TODO: Get playlist thumbnail from playlist data rather than first video
     @thumbnail_id ||= Invidious::Database::PlaylistVideos.select_one_id(self.id, self.index) || "-----------"
     "/vi/#{@thumbnail_id}/mqdefault.jpg"
@@ -259,15 +266,16 @@ module Invidious::Playlists::Playlists
     plid = "IVPL#{Random::Secure.urlsafe_base64(24)[0, 31]}"
 
     playlist = InvidiousPlaylist.new({
-      title:       title.byte_slice(0, 150),
-      id:          plid,
-      author:      user.email,
-      description: "", # Max 5000 characters
-      video_count: 0,
-      created:     Time.utc,
-      updated:     Time.utc,
-      privacy:     privacy,
-      index:       [] of Int64,
+      title:         title.byte_slice(0, 150),
+      id:            plid,
+      author:        user.email,
+      description:   "", # Max 5000 characters
+      thumbnail_url: nil,
+      video_count:   0,
+      created:       Time.utc,
+      updated:       Time.utc,
+      privacy:       privacy,
+      index:         [] of Int64,
     })
 
     Invidious::Database::Playlists.insert(playlist)
@@ -275,17 +283,30 @@ module Invidious::Playlists::Playlists
     return playlist
   end
 
+  # YouTube hands us an absolute thumbnail URL on its own CDN, e.g.
+  # "https://i.ytimg.com/vi/<id>/hqdefault.jpg?sqp=...". Storing that verbatim
+  # would both bypass this instance's image proxy and pin the row to whichever
+  # host saved it. Reduce it to a relative path this instance can serve.
+  private def local_thumbnail_path(url : String?) : String?
+    return nil if url.nil? || url.empty?
+
+    if match = url.match(/\/vi\/([A-Za-z0-9_-]{11})\//)
+      "/vi/#{match[1]}/mqdefault.jpg"
+    end
+  end
+
   def subscribe_playlist(user, playlist)
     playlist = InvidiousPlaylist.new({
-      title:       playlist.title[..150],
-      id:          playlist.id,
-      author:      user.email,
-      description: "", # Max 5000 characters
-      video_count: playlist.video_count,
-      created:     Time.utc,
-      updated:     playlist.updated,
-      privacy:     PlaylistPrivacy::Private,
-      index:       [] of Int64,
+      title:         playlist.title[..150],
+      id:            playlist.id,
+      author:        user.email,
+      description:   "", # Max 5000 characters
+      thumbnail_url: local_thumbnail_path(playlist.thumbnail),
+      video_count:   playlist.video_count,
+      created:       Time.utc,
+      updated:       playlist.updated,
+      privacy:       PlaylistPrivacy::Private,
+      index:         [] of Int64,
     })
 
     Invidious::Database::Playlists.insert(playlist)
