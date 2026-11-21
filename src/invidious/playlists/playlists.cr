@@ -171,7 +171,6 @@ struct InvidiousPlaylist
   property id : String
   property author : String
   property description : String = ""
-  property thumbnail_url : String?
   property video_count : Int32
   property created : Time
   property updated : Time
@@ -179,6 +178,9 @@ struct InvidiousPlaylist
   @[DB::Field(converter: InvidiousPlaylist::PlaylistPrivacyConverter)]
   property privacy : PlaylistPrivacy = PlaylistPrivacy::Private
   property index : Array(Int64)
+
+  # Last, to match the column order of databases already in the field.
+  property thumbnail_url : String?
 
   @[DB::Field(ignore: true)]
   property thumbnail_id : String?

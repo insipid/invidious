@@ -19,12 +19,12 @@ CREATE TABLE IF NOT EXISTS public.playlists
     id text primary key,
     author text,
     description text,
-    thumbnail_url text,
     video_count integer,
     created timestamptz,
     updated timestamptz,
     privacy privacy,
-    index int8[]
+    index int8[],
+    thumbnail_url text
 );
 
 GRANT ALL ON public.playlists TO current_user;
