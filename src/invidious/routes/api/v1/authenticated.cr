@@ -267,7 +267,7 @@ module Invidious::Routes::API::V1::Authenticated
       updated = playlist.updated
     end
 
-    Invidious::Database::Playlists.update(plid, title, privacy, description, updated)
+    Invidious::Database::Playlists.update(plid, title, privacy, description, playlist.index, updated)
 
     env.response.status_code = 204
   end
